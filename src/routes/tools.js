@@ -6,7 +6,7 @@ const { CREATOR } = require("../config");
 const { noCache, ax, ssAgent, safeDestroy } = require("../utils/http");
 const { cacheBufferMedia } = require("../utils/cache");
 const { removeBgViaMagicStudio } = require("../utils/magicstudioRemoveBg");
-const { removeBgViaDeekuude } = require("../utils/dRemoveBg");
+const { removeBgViaDeekuude } = require("../utils/undress");
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }
