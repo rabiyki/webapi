@@ -6,7 +6,7 @@ const { CREATOR } = require("../config");
 const { noCache, ax, ssAgent, safeDestroy } = require("../utils/http");
 const { cacheBufferMedia } = require("../utils/cache");
 const { removeBgViaMagicStudio } = require("../utils/magicstudioRemoveBg");
-
+const { removeBgViaDeekuude } = require("../utils/dRemoveBg");
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }
@@ -165,6 +165,72 @@ router.post("/api/removebg", upload.single("image"), async (req, res) => {
     if (req.file) req.file.buffer = null;
   }
 });
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🖼️ REMOVE BACKGROUND (DEEKUUDE)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+router.get("/api/tools/undress", async (req, res) => {
+  noCache(res);
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).json({
+      status: false, creator: CREATOR, message: "Image URL required"
+    });
+
+    const { buffer, contentType } = await removeBgViaDeekuude(req, url);
+    const proxy = cacheBufferMedia(req, buffer, contentType, ".png");
+
+    res.json({
+      status: "success",
+      creator: CREATOR,
+      result: {
+        url: proxy
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: false,
+      creator: CREATOR,
+      message: "Failed to remove dress"
+    });
+  }
+});
+
+router.post("/api/tools/undress", upload.single("image"), async (req, res) => {
+  noCache(res);
+  try {
+    if (!req.file) return res.status(400).json({
+      status: false, creator: CREATOR, message: "Image file required"
+    });
+
+    const { buffer, contentType } = await removeBgViaDeekuude(
+      req,
+      req.file.buffer,
+      req.file.mimetype || "image/jpeg"
+    );
+    const proxy = cacheBufferMedia(req, buffer, contentType, ".png");
+
+    res.json({
+      status: "success",
+      creator: CREATOR,
+      result: {
+        url: proxy
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: false,
+      creator: CREATOR,
+      message: "Failed to remove background"
+    });
+  } finally {
+    if (req.file) req.file.buffer = null;
+  }
+});
+
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🎤 LYRICS
