@@ -22,42 +22,22 @@ function extractExtension(url) {
   }
 }
 
-// Strips anything that isn't safe in a URL path segment / filename
-function sanitizeName(name) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "").replace(/\.{2,}/g, ".");
-}
-
 /**
  * Returns an existing "12hsy.mp4"-style filename for this URL if we've
  * shortened it before, otherwise generates a fresh unique one and stores it.
  *
- * If customName is given, it's used as the base filename instead of a
- * random one (the real extension is appended if customName doesn't
- * already include one). Throws if that name is already taken by a
- * different URL.
+ * The extension is taken from the real URL's path when it has one
+ * (ar-hosting, catbox, etc.). Some backends (like mega.nz links) never
+ * carry an extension in the URL itself — for those, pass fallbackExt
+ * (usually derived from the originally uploaded file's name) so the
+ * short link still ends in ".jpg", ".mp4", etc. Without an extension the
+ * proxy route (which requires one) will never match the generated code.
  */
-async function getOrCreateFilename(realUrl, customName) {
+async function getOrCreateFilename(realUrl, fallbackExt = "") {
   const existing = await Link.findOne({ url: realUrl }).lean();
-  if (existing && !customName) return existing.code;
+  if (existing) return existing.code;
 
-  const ext = extractExtension(realUrl);
-
-  if (customName) {
-    let filename = sanitizeName(customName);
-    if (!filename) throw new Error("Invalid custom name");
-    if (!path.extname(filename)) filename += ext;
-
-    const taken = await Link.findOne({ code: filename }).lean();
-    if (taken) {
-      if (taken.url === realUrl) return filename; // already points to the same file
-      throw new Error(`Name "${filename}" is already taken`);
-    }
-
-    await Link.create({ code: filename, url: realUrl });
-    return filename;
-  }
-
-  // No custom name -> random 5-char code
+  const ext = extractExtension(realUrl) || fallbackExt || "";
   let filename;
   let attempts = 0;
 
@@ -73,12 +53,13 @@ async function getOrCreateFilename(realUrl, customName) {
 
 /**
  * Turns any external URL into "https://mydomain.com/12hsy.mp4"
- * (or "https://mydomain.com/mycustomname.mp4" if customName is given)
+ * fallbackExt (optional): e.g. ".jpg" — used when realUrl itself has no
+ * extension in its path (mega.nz links are the main case for this).
  */
-async function shortenLink(req, realUrl, customName) {
+async function shortenLink(req, realUrl, customName, fallbackExt = "") {
   if (!realUrl) return null;
 
-  const filename = await getOrCreateFilename(realUrl, customName);
+  const filename = await getOrCreateFilename(realUrl, fallbackExt);
   const base = `${req.protocol}://${req.get("host")}`;
   return `${base}/${filename}`;
 }
