@@ -2,10 +2,11 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const path = require("path");
+const crypto = require("crypto");
 const FormData = require("form-data");
 const { CREATOR } = require("../config");
 const { noCache, ax } = require("../utils/http");
-const { shortenLink } = require("../utils/shortlink");
+const { shortenLink, findExistingByHash } = require("../utils/shortlink");
 const { uploadFileToMega } = require("../utils/mega");
 
 const upload = multer({
@@ -24,14 +25,14 @@ const upload = multer({
 //
 //    Backend selection: random order, with automatic fallback — if the
 //    picked backend throws/fails, the next one in the shuffled order is
-//    tried automatically. Only if ALL backends fail does the request fail.
+//    tried automatically. Only if ALL backends fail does the request fail,
+//    and even then the client only ever sees a generic message — never
+//    which backends exist or why any of them failed (that detail is only
+//    logged server-side, never sent in the response).
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 // Backends that accept a raw file upload
-// ⚠️ TEMPORARY: shudhu mega test korar jonno onno providers off kora ache.
-// Test sesh hole ei line ta age jemon chilo shei rokom revert kore dio:
-// const FILE_PROVIDERS = ["ar-hosting", "cdnfile", "nekohime", "catbox", "mega"];
-const FILE_PROVIDERS = ["mega"];
+const FILE_PROVIDERS = ["ar-hosting", "cdnfile", "nekohime", "catbox", "mega"];
 
 // Backends that can fetch a remote URL on our behalf
 const URL_PROVIDERS = ["ar-hosting", "catbox"];
@@ -166,7 +167,8 @@ const URL_HANDLERS = {
 /**
  * Tries each provider (in random order) one by one.
  * Returns the first successful result. If every provider fails,
- * throws an error listing what went wrong on each one.
+ * throws an error listing what went wrong on each one — this detail
+ * is for server logs only, it never reaches the HTTP response.
  */
 async function tryProvidersInOrder(providers, handlers, arg) {
   const order = shuffle(providers);
@@ -205,8 +207,31 @@ router.all("/api/upload", upload.single("file"), async (req, res) => {
 
   try {
     let result;
+    let fileHash = null;
 
     if (req.file) {
+      // Duplicate detection: same file content -> same short link,
+      // no re-upload to any backend needed.
+      fileHash = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+      const existingCode = await findExistingByHash(fileHash);
+
+      if (existingCode) {
+        const base = `${req.protocol}://${req.get("host")}`;
+        const shortUrl = `${base}/${existingCode}`;
+        return res.json({
+          success: true,
+          code: 200,
+          creator: CREATOR,
+          result: {
+            size: req.file.size || null,
+            type: req.file.mimetype || null,
+            uploaded: new Date().toISOString(),
+            url: shortUrl,
+            cdn: shortUrl
+          }
+        });
+      }
+
       result = await uploadFile(req.file);
     } else if (url) {
       result = await uploadUrl(url);
@@ -219,8 +244,12 @@ router.all("/api/upload", upload.single("file"), async (req, res) => {
       });
     }
 
+    // File uploads: keep the short link's extension consistent with the
+    // original filename (some backends, like mega.nz, don't carry an
+    // extension in their own URL, so this fallback keeps ".jpg"/".mp4"/etc.
+    // showing up correctly on the short link either way).
     const fallbackExt = req.file ? path.extname(req.file.originalname || "") : "";
-    const shortUrl = await shortenLink(req, result.realUrl, customName, fallbackExt);
+    const shortUrl = await shortenLink(req, result.realUrl, customName, fallbackExt, fileHash);
 
     return res.json({
       success: true,
@@ -236,14 +265,16 @@ router.all("/api/upload", upload.single("file"), async (req, res) => {
     });
 
   } catch (e) {
-    // ⚠️ TEMPORARY DEBUG: real error dekhanor jonno e.message add kora ache.
-    // Debug sesh hole "debug:" line ta remove kore dio (production e error leak kora risky)
+    // Log the real reason server-side only (which backends were tried,
+    // why each one failed) — the client only ever sees a clean, generic
+    // message. Nothing about internal providers or their errors leaks out.
+    console.error("[upload] all backends failed:", e.message);
+
     return res.status(502).json({
       success: false,
       code: 502,
       creator: CREATOR,
-      message: "Upload failed: all backend servers are currently unavailable. Please try again later.",
-      debug: e.message
+      message: "Upload failed. Please try again in a moment."
     });
   } finally {
     if (req.file) req.file.buffer = null;
