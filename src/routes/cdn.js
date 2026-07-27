@@ -234,12 +234,14 @@ router.all("/api/upload", upload.single("file"), async (req, res) => {
     });
 
   } catch (e) {
-    // All backends failed -> clean failure message, no internal details leaked
+    // ⚠️ TEMPORARY DEBUG: real error dekhanor jonno e.message add kora ache.
+    // Debug sesh hole "debug:" line ta remove kore dio (production e error leak kora risky)
     return res.status(502).json({
       success: false,
       code: 502,
       creator: CREATOR,
-      message: "Upload failed: all backend servers are currently unavailable. Please try again later."
+      message: "Upload failed: all backend servers are currently unavailable. Please try again later.",
+      debug: e.message
     });
   } finally {
     if (req.file) req.file.buffer = null;
