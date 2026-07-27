@@ -8,8 +8,9 @@ const { shortenLink } = require("../utils/shortlink");
 const { uploadFileToMega } = require("../utils/mega");
 
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }
+  storage: multer.memoryStorage()
+  // no fileSize limit — memoryStorage bhoroshai boro file hole RAM usage barbe,
+  // tai server er RAM onujayi target koto boro file expect kora jai eita mathay rakhte hobe
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
