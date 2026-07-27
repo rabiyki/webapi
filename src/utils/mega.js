@@ -1,19 +1,24 @@
 const fs = require("fs");
 const path = require("path");
 const { Storage } = require("megajs"); // npm i megajs
+const { ax } = require("./http");
 
-const ACCOUNTS_PATH = path.join(__dirname, "..", "data", "megaaccount.json");
+// 👇 GitHub raw URL — tomar repo er raw link
+const MEGA_ACCOUNTS_URL = "https://raw.githubusercontent.com/xoo59568-art/webapi/refs/heads/main/data/megaaccount.json";
 
-/**
- * Loads every {email, password} pair from data/megaaccount.json.
- * File can have 1 account or 50 — doesn't matter.
- */
-function loadAccounts() {
-  if (!fs.existsSync(ACCOUNTS_PATH)) {
+const LOCAL_ACCOUNTS_PATH = path.join(__dirname, "..", "data", "megaaccount.json");
+
+// Cache so we don't hit GitHub on every single upload
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let cachedAccounts = null;
+let cachedAt = 0;
+
+function loadLocalAccounts() {
+  if (!fs.existsSync(LOCAL_ACCOUNTS_PATH)) {
     throw new Error("data/megaaccount.json not found");
   }
 
-  const raw = fs.readFileSync(ACCOUNTS_PATH, "utf-8");
+  const raw = fs.readFileSync(LOCAL_ACCOUNTS_PATH, "utf-8");
   const accounts = JSON.parse(raw);
 
   if (!Array.isArray(accounts) || accounts.length === 0) {
@@ -23,8 +28,50 @@ function loadAccounts() {
   return accounts.filter(a => a.email && a.password);
 }
 
-function pickRandomAccount() {
-  const accounts = loadAccounts();
+async function loadRemoteAccounts() {
+  const { data } = await ax.get(MEGA_ACCOUNTS_URL, { timeout: 10000 });
+  const accounts = typeof data === "string" ? JSON.parse(data) : data;
+
+  if (!Array.isArray(accounts) || accounts.length === 0) {
+    throw new Error("Remote megaaccount.json is empty or invalid");
+  }
+
+  return accounts.filter(a => a.email && a.password);
+}
+
+/**
+ * Loads mega accounts. If MEGA_ACCOUNTS_URL is set (a GitHub raw link,
+ * etc.), fetches the account list from there — cached for CACHE_TTL_MS
+ * so every upload doesn't re-fetch. Falls back to the local
+ * data/megaaccount.json file if the URL isn't set, or if the remote
+ * fetch fails and a local file exists as backup.
+ */
+async function loadAccounts() {
+  const now = Date.now();
+  if (cachedAccounts && (now - cachedAt) < CACHE_TTL_MS) {
+    return cachedAccounts;
+  }
+
+  let accounts;
+
+  if (MEGA_ACCOUNTS_URL) {
+    try {
+      accounts = await loadRemoteAccounts();
+    } catch (e) {
+      console.error("[mega] remote account fetch failed, falling back to local file:", e.message);
+      accounts = loadLocalAccounts();
+    }
+  } else {
+    accounts = loadLocalAccounts();
+  }
+
+  cachedAccounts = accounts;
+  cachedAt = now;
+  return accounts;
+}
+
+async function pickRandomAccount() {
+  const accounts = await loadAccounts();
   const idx = Math.floor(Math.random() * accounts.length);
   return accounts[idx];
 }
@@ -33,11 +80,11 @@ function pickRandomAccount() {
  * Same pattern as the baileys session-id project's mega.js:
  *   const link = await upload(buffer, "file.json");
  *
- * Picks a random account from data/megaaccount.json, logs in,
- * uploads the buffer, and returns just the mega.nz link (string).
+ * Picks a random account (remote or local), logs in, uploads the
+ * buffer, and returns just the mega.nz link (string).
  */
 async function upload(buffer, name) {
-  const account = pickRandomAccount();
+  const account = await pickRandomAccount();
 
   const storage = await new Storage({
     email: account.email,
