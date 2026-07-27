@@ -27,7 +27,10 @@ const upload = multer({
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 // Backends that accept a raw file upload
-const FILE_PROVIDERS = ["ar-hosting", "cdnfile", "nekohime", "catbox", "mega"];
+// ⚠️ TEMPORARY: shudhu mega test korar jonno onno providers off kora ache.
+// Test sesh hole ei line ta age jemon chilo shei rokom revert kore dio:
+// const FILE_PROVIDERS = ["ar-hosting", "cdnfile", "nekohime", "catbox", "mega"];
+const FILE_PROVIDERS = ["mega"];
 
 // Backends that can fetch a remote URL on our behalf
 const URL_PROVIDERS = ["ar-hosting", "catbox"];
