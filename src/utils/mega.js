@@ -30,10 +30,13 @@ function pickRandomAccount() {
 }
 
 /**
- * Logs into a random Mega account and uploads the given buffer.
- * Returns { realUrl, size, type, uploaded }
+ * Same pattern as the baileys session-id project's mega.js:
+ *   const link = await upload(buffer, "file.json");
+ *
+ * Picks a random account from data/megaaccount.json, logs in,
+ * uploads the buffer, and returns just the mega.nz link (string).
  */
-async function uploadFileToMega(file) {
+async function upload(buffer, name) {
   const account = pickRandomAccount();
 
   const storage = await new Storage({
@@ -44,22 +47,33 @@ async function uploadFileToMega(file) {
 
   try {
     const uploadedFile = await storage.upload({
-      name: file.originalname,
-      size: file.size
-    }, file.buffer).complete;
+      name,
+      size: buffer.length
+    }, buffer).complete;
 
     const link = await uploadedFile.link({ noKey: false });
-
-    return {
-      realUrl: link,
-      size: file.size || null,
-      type: file.mimetype || null,
-      uploaded: new Date().toISOString()
-    };
+    return link;
   } finally {
     // Always close the session so we don't leak open connections
     storage.close();
   }
 }
 
-module.exports = { uploadFileToMega, pickRandomAccount, loadAccounts };
+/**
+ * Wrapper for our /api/upload route, which works with multer's
+ * file object ({ originalname, mimetype, size, buffer }) and
+ * expects the { realUrl, size, type, uploaded } shape the other
+ * providers (ar-hosting, catbox, etc.) return.
+ */
+async function uploadFileToMega(file) {
+  const link = await upload(file.buffer, file.originalname);
+
+  return {
+    realUrl: link,
+    size: file.size || null,
+    type: file.mimetype || null,
+    uploaded: new Date().toISOString()
+  };
+}
+
+module.exports = { upload, uploadFileToMega, pickRandomAccount, loadAccounts };
