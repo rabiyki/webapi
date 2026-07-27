@@ -416,8 +416,9 @@
                 `;
                 if (window.hljs) hljs.highlightElement(wrapper.querySelector('code'));
             } else {
-                wrapper.innerHTML = `<span class="text-red-400 text-xs font-mono" id="response-content-${id}">Upload failed: API responded without a valid URL structure.</span>`;
-            }
+  const realMsg = json.message || json.error || "API responded without a valid URL structure.";
+  wrapper.innerHTML = `<span class="text-red-400 text-xs font-mono" id="response-content-${id}">Upload failed: ${realMsg}</span>`;
+}
             clearBtn.classList.remove('hidden');
         } catch (err) {
             const wrap = document.getElementById(`response-body-wrapper-${id}`);
