@@ -5,6 +5,7 @@ const FormData = require("form-data");
 const { CREATOR } = require("../config");
 const { noCache, ax } = require("../utils/http");
 const { shortenLink } = require("../utils/shortlink");
+const { uploadFileToMega } = require("../utils/mega");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -18,15 +19,27 @@ const upload = multer({
 //    - POST /api/upload  (body: { url })           -> upload-from-url
 //    Response never reveals which backend was used. Every link returned
 //    is a short "/xxxxx.ext" URL streamed live by proxy.js — no redirect.
+//
+//    Backend selection: random order, with automatic fallback — if the
+//    picked backend throws/fails, the next one in the shuffled order is
+//    tried automatically. Only if ALL backends fail does the request fail.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 // Backends that accept a raw file upload
-const FILE_PROVIDERS = ["ar-hosting", "cdnfile", "nekohime", "catbox"];
-const pickFileProvider = () => FILE_PROVIDERS[Math.floor(Math.random() * FILE_PROVIDERS.length)];
+const FILE_PROVIDERS = ["ar-hosting", "cdnfile", "nekohime", "catbox", "mega"];
 
 // Backends that can fetch a remote URL on our behalf
 const URL_PROVIDERS = ["ar-hosting", "catbox"];
-const pickUrlProvider = () => URL_PROVIDERS[Math.floor(Math.random() * URL_PROVIDERS.length)];
+
+// Fisher-Yates shuffle — returns a new array, doesn't mutate the original
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 async function uploadFileToArHosting(file) {
   const form = new FormData();
@@ -132,22 +145,52 @@ async function uploadUrlToCatbox(url) {
   return { realUrl, size: null, type: null, uploaded: new Date().toISOString() };
 }
 
-async function uploadFile(file) {
-  const provider = pickFileProvider();
-  switch (provider) {
-    case "ar-hosting": return uploadFileToArHosting(file);
-    case "cdnfile":    return uploadFileToCdnfile(file);
-    case "nekohime":   return uploadFileToNekohime(file);
-    case "catbox":     return uploadFileToCatbox(file);
+const FILE_HANDLERS = {
+  "ar-hosting": uploadFileToArHosting,
+  "cdnfile": uploadFileToCdnfile,
+  "nekohime": uploadFileToNekohime,
+  "catbox": uploadFileToCatbox,
+  "mega": uploadFileToMega
+};
+
+const URL_HANDLERS = {
+  "ar-hosting": uploadUrlToArHosting,
+  "catbox": uploadUrlToCatbox
+};
+
+/**
+ * Tries each provider (in random order) one by one.
+ * Returns the first successful result. If every provider fails,
+ * throws an error listing what went wrong on each one.
+ */
+async function tryProvidersInOrder(providers, handlers, arg) {
+  const order = shuffle(providers);
+  const errors = [];
+
+  for (const provider of order) {
+    try {
+      const result = await handlers[provider](arg);
+      return { result, provider };
+    } catch (e) {
+      errors.push(`${provider}: ${e.message}`);
+    }
   }
+
+  const err = new Error(
+    `All upload backends failed (tried ${order.join(", ")}) -> ${errors.join(" | ")}`
+  );
+  err.allFailed = true;
+  throw err;
+}
+
+async function uploadFile(file) {
+  const { result } = await tryProvidersInOrder(FILE_PROVIDERS, FILE_HANDLERS, file);
+  return result;
 }
 
 async function uploadUrl(url) {
-  const provider = pickUrlProvider();
-  switch (provider) {
-    case "ar-hosting": return uploadUrlToArHosting(url);
-    case "catbox":     return uploadUrlToCatbox(url);
-  }
+  const { result } = await tryProvidersInOrder(URL_PROVIDERS, URL_HANDLERS, url);
+  return result;
 }
 
 router.all("/api/upload", upload.single("file"), async (req, res) => {
@@ -187,7 +230,13 @@ router.all("/api/upload", upload.single("file"), async (req, res) => {
     });
 
   } catch (e) {
-    return res.status(500).json({ success: false, code: 500, creator: CREATOR, error: e.message });
+    // All backends failed -> clean failure message, no internal details leaked
+    return res.status(502).json({
+      success: false,
+      code: 502,
+      creator: CREATOR,
+      message: "Upload failed: all backend servers are currently unavailable. Please try again later."
+    });
   } finally {
     if (req.file) req.file.buffer = null;
   }
