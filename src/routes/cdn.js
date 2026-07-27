@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
+const path = require("path");
 const FormData = require("form-data");
 const { CREATOR } = require("../config");
 const { noCache, ax } = require("../utils/http");
@@ -218,7 +219,8 @@ router.all("/api/upload", upload.single("file"), async (req, res) => {
       });
     }
 
-    const shortUrl = await shortenLink(req, result.realUrl, customName);
+    const fallbackExt = req.file ? path.extname(req.file.originalname || "") : "";
+    const shortUrl = await shortenLink(req, result.realUrl, customName, fallbackExt);
 
     return res.json({
       success: true,
