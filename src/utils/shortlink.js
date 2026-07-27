@@ -23,6 +23,17 @@ function extractExtension(url) {
 }
 
 /**
+ * Looks up a previously-uploaded file by its content hash.
+ * Returns the existing short code if found, otherwise null.
+ * Used to skip re-uploading duplicate files entirely.
+ */
+async function findExistingByHash(hash) {
+  if (!hash) return null;
+  const existing = await Link.findOne({ hash }).lean();
+  return existing ? existing.code : null;
+}
+
+/**
  * Returns an existing "12hsy.mp4"-style filename for this URL if we've
  * shortened it before, otherwise generates a fresh unique one and stores it.
  *
@@ -30,10 +41,13 @@ function extractExtension(url) {
  * (ar-hosting, catbox, etc.). Some backends (like mega.nz links) never
  * carry an extension in the URL itself — for those, pass fallbackExt
  * (usually derived from the originally uploaded file's name) so the
- * short link still ends in ".jpg", ".mp4", etc. Without an extension the
- * proxy route (which requires one) will never match the generated code.
+ * short link still ends in ".jpg", ".mp4", etc.
+ *
+ * hash (optional): the uploaded file's content hash — stored alongside
+ * the link so future uploads of the same file can be detected via
+ * findExistingByHash() instead of re-uploading to a backend.
  */
-async function getOrCreateFilename(realUrl, fallbackExt = "") {
+async function getOrCreateFilename(realUrl, fallbackExt = "", hash = null) {
   const existing = await Link.findOne({ url: realUrl }).lean();
   if (existing) return existing.code;
 
@@ -47,7 +61,7 @@ async function getOrCreateFilename(realUrl, fallbackExt = "") {
     if (attempts > 15) throw new Error("Could not generate a unique filename");
   } while (await Link.exists({ code: filename }));
 
-  await Link.create({ code: filename, url: realUrl });
+  await Link.create({ code: filename, url: realUrl, hash: hash || undefined });
   return filename;
 }
 
@@ -55,13 +69,14 @@ async function getOrCreateFilename(realUrl, fallbackExt = "") {
  * Turns any external URL into "https://mydomain.com/12hsy.mp4"
  * fallbackExt (optional): e.g. ".jpg" — used when realUrl itself has no
  * extension in its path (mega.nz links are the main case for this).
+ * hash (optional): content hash to store for future duplicate detection.
  */
-async function shortenLink(req, realUrl, customName, fallbackExt = "") {
+async function shortenLink(req, realUrl, customName, fallbackExt = "", hash = null) {
   if (!realUrl) return null;
 
-  const filename = await getOrCreateFilename(realUrl, fallbackExt);
+  const filename = await getOrCreateFilename(realUrl, fallbackExt, hash);
   const base = `${req.protocol}://${req.get("host")}`;
   return `${base}/${filename}`;
 }
 
-module.exports = { shortenLink, randomCode };
+module.exports = { shortenLink, randomCode, findExistingByHash };
