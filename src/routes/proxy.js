@@ -8,12 +8,19 @@ const { noCache, safeDestroy } = require("../utils/http");
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🐇 SHORT-LINK STREAM PROXY
 //    Matches things like /12hsy.mp4, /aB3k9.jpg — 4-10 random chars
-//    followed by a real extension. Must be mounted LAST in app.js so
-//    it never shadows your other page/API routes.
+//    followed by a real extension, OR a plain code with no extension
+//    (used by the /api/shorten URL shortener, e.g. /my-link).
+//    Must be mounted LAST in app.js so it never shadows your other
+//    page/API routes.
 //
 //    Mega.nz links can't be streamed with a plain HTTP GET (the file
 //    is encrypted) — those go through megajs's File.download() instead.
-//    Every other backend still streams via plain axios, unchanged.
+//    Every other file backend still streams via plain axios, unchanged.
+//
+//    If the saved link is type "redirect" (made via /api/shorten),
+//    we just 302-redirect to the real url instead of streaming —
+//    file-upload links (type "file", the original/default behavior)
+//    are completely unaffected by this.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const MEGA_URL_RE = /^https?:\/\/mega\.nz\/(file|#!)/i;
@@ -71,7 +78,7 @@ async function streamFromHttp(url, req, res) {
   stream.pipe(res);
 }
 
-router.get("/:code([A-Za-z0-9]{4,10}\\.[A-Za-z0-9]{2,5})", async (req, res) => {
+router.get("/:code([A-Za-z0-9_-]{3,32}(?:\\.[A-Za-z0-9]{2,5})?)", async (req, res) => {
   noCache(res);
 
   try {
@@ -85,6 +92,12 @@ router.get("/:code([A-Za-z0-9]{4,10}\\.[A-Za-z0-9]{2,5})", async (req, res) => {
       return res.status(404).json({ status: false, message: "File not found" });
     }
 
+    // Plain URL-shortener link -> just redirect, don't stream/proxy anything.
+    if (link.type === "redirect") {
+      return res.redirect(302, link.url);
+    }
+
+    // Everything below is the original, unchanged file-streaming behavior.
     if (MEGA_URL_RE.test(link.url)) {
       await streamFromMega(link.url, req, res);
     } else {
