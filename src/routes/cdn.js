@@ -190,8 +190,16 @@ async function tryProvidersInOrder(providers, handlers, arg) {
   throw err;
 }
 
+// Files at or above this size skip the other backends entirely and go
+// straight to mega (the other backends tend to reject/choke on big files).
+const LARGE_FILE_THRESHOLD = 30 * 1024 * 1024; // 30MB
+
 async function uploadFile(file) {
-  const { result } = await tryProvidersInOrder(FILE_PROVIDERS, FILE_HANDLERS, file);
+  const providers = (file.size && file.size > LARGE_FILE_THRESHOLD)
+    ? ["mega"]
+    : FILE_PROVIDERS;
+
+  const { result } = await tryProvidersInOrder(providers, FILE_HANDLERS, file);
   return result;
 }
 
