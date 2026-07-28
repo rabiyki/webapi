@@ -68,7 +68,7 @@ app.use(toolsRouter);
 app.use(cdnRouter);
 app.use(ghibliRouter);
 app.use(neuropairRouter);
-app.use(shortenRouter);
+app.use(shortlinkRouter);
 app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
