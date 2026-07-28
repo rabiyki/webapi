@@ -1,0 +1,338 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Shorten any link into a fast, private RabbitXMD short URL.">
+<meta name="theme-color" content="#0E0E10">
+<title>RabbitXMD — Link Shortener</title>
+<link rel="icon" href="images/favicon.ico" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+    *{box-sizing:border-box;}
+    ::-webkit-scrollbar{display:none;}
+    html,body{margin:0;padding:0;}
+    body{
+        min-height:100vh;
+        background:
+            radial-gradient(ellipse 900px 500px at 50% -10%, rgba(212,168,87,0.10), transparent 60%),
+            #0E0E10;
+        color:#EDEDED;
+        font-family:'Inter',system-ui,sans-serif;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:24px;
+        position:relative;
+        overflow-x:hidden;
+    }
+    body::before{
+        content:'';
+        position:fixed; inset:0; z-index:-1;
+        background-image:
+            linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px);
+        background-size:44px 44px;
+        mask-image: radial-gradient(ellipse 70% 60% at 50% 20%, black 30%, transparent 75%);
+    }
+
+    .wrap{ width:100%; max-width:480px; }
+
+    /* ---------- Brand ---------- */
+    .brand{ display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:36px; }
+    .brand-mark{ position:relative; width:34px; height:40px; flex-shrink:0; }
+    .ear{ position:absolute; top:-12px; width:4px; height:26px; border-radius:4px; background:linear-gradient(180deg,#D4A857,#8a6d2f); }
+    .ear.l{ left:5px; transform:rotate(-14deg); }
+    .ear.r{ right:5px; transform:rotate(14deg); }
+    .head{ position:absolute; left:0; right:0; bottom:0; height:26px; border-radius:50%; background:#F2F2F2; }
+    .head::after{
+        content:''; position:absolute; left:50%; top:52%; width:5px; height:5px; border-radius:50%;
+        background:#0E0E10; transform:translate(-50%,-50%);
+        box-shadow: -9px 0 0 #0E0E10, 9px 0 0 #0E0E10;
+    }
+    .brand-text .name{ font-family:'Fraunces',serif; font-weight:600; font-size:19px; color:#F5F1E8; letter-spacing:0.01em; line-height:1.1; }
+    .brand-text .tag{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#8a8a8f; letter-spacing:0.14em; text-transform:uppercase; margin-top:3px; }
+
+    /* ---------- Card ---------- */
+    .card{
+        background:linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015));
+        border:1px solid rgba(255,255,255,0.09);
+        border-radius:20px;
+        padding:32px;
+        backdrop-filter:blur(20px);
+        box-shadow: 0 30px 60px -20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+        position:relative;
+        overflow:hidden;
+    }
+    .card::before{
+        content:''; position:absolute; top:0; left:0; right:0; height:1px;
+        background:linear-gradient(90deg, transparent, rgba(212,168,87,0.55), transparent);
+    }
+
+    h1{ font-family:'Fraunces',serif; font-weight:500; font-size:26px; color:#F7F4EC; margin:0 0 6px; letter-spacing:-0.01em; }
+    .sub{ color:#9a9a9f; font-size:13.5px; margin:0 0 26px; line-height:1.5; }
+
+    label{ display:block; font-size:11px; font-weight:600; color:#8a8a8f; text-transform:uppercase; letter-spacing:0.09em; margin-bottom:8px; }
+
+    .field{
+        display:flex; align-items:center; gap:10px;
+        background:rgba(0,0,0,0.35);
+        border:1px solid rgba(255,255,255,0.09);
+        border-radius:12px;
+        padding:4px 4px 4px 16px;
+        transition:border-color .18s ease, box-shadow .18s ease;
+    }
+    .field:focus-within{ border-color:rgba(212,168,87,0.55); box-shadow:0 0 0 3px rgba(212,168,87,0.08); }
+    .field svg{ color:#5f5f66; flex-shrink:0; }
+    .field input{
+        flex:1; min-width:0; background:transparent; border:0; outline:0;
+        color:#F0EEE6; font-family:'IBM Plex Mono',monospace; font-size:14px;
+        padding:13px 12px 13px 0;
+    }
+    .field input::placeholder{ color:#55555c; }
+    .field input:focus{ outline:0; }
+
+    .alias-toggle{
+        display:inline-flex; align-items:center; gap:6px;
+        background:none; border:0; padding:0; margin-top:14px;
+        color:#77777d; font-size:12.5px; font-family:'Inter'; cursor:pointer;
+        transition:color .15s ease;
+    }
+    .alias-toggle:hover{ color:#c7c7cc; }
+    .alias-toggle svg{ width:13px; height:13px; opacity:0.8; }
+
+    .alias-wrap{ margin-top:12px; }
+    .alias-wrap.hidden{ display:none; }
+    .alias-prefix{ font-family:'IBM Plex Mono',monospace; color:#5f5f66; font-size:13px; white-space:nowrap; }
+    .hint{ font-size:11px; color:#55555c; margin:6px 2px 0; }
+
+    .go-btn{
+        width:100%; margin-top:22px;
+        display:flex; align-items:center; justify-content:center; gap:9px;
+        background:linear-gradient(180deg,#E9CD8F,#D4A857);
+        color:#1C1607; font-weight:600; font-size:14px;
+        border:0; border-radius:12px; padding:15px;
+        cursor:pointer;
+        box-shadow:0 10px 24px -8px rgba(212,168,87,0.45);
+        transition:transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+        font-family:'Inter';
+    }
+    .go-btn:hover{ transform:translateY(-1px); box-shadow:0 14px 28px -8px rgba(212,168,87,0.55); }
+    .go-btn:active{ transform:translateY(0); }
+    .go-btn:disabled{ opacity:0.65; cursor:default; transform:none; }
+    .go-btn svg{ width:16px; height:16px; }
+    .spin{ animation:spin .85s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+
+    .error{
+        display:none; align-items:flex-start; gap:8px;
+        margin-top:16px; padding:11px 13px;
+        background:rgba(224,90,90,0.08); border:1px solid rgba(224,90,90,0.25);
+        border-radius:10px; color:#e08a8a; font-size:12.5px; line-height:1.5;
+    }
+    .error.show{ display:flex; }
+
+    /* ---------- Result ---------- */
+    .result{
+        display:none; margin-top:24px; padding-top:22px;
+        border-top:1px solid rgba(255,255,255,0.08);
+    }
+    .result.show{ display:block; animation:rise .3s cubic-bezier(.2,.8,.2,1) both; }
+    @keyframes rise{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:translateY(0);} }
+
+    .result-label{ font-size:11px; font-weight:600; color:#8a8a8f; text-transform:uppercase; letter-spacing:0.09em; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .result-label .dot{ width:6px; height:6px; border-radius:50%; background:#79d99a; box-shadow:0 0 8px rgba(121,217,154,0.8); }
+
+    .result-row{ display:flex; gap:8px; }
+    .result-box{
+        flex:1; min-width:0;
+        background:rgba(212,168,87,0.06);
+        border:1px solid rgba(212,168,87,0.25);
+        border-radius:12px; padding:14px 16px;
+    }
+    .result-box a{ font-family:'IBM Plex Mono',monospace; color:#F0DDA8; font-size:14.5px; text-decoration:none; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .result-box a:hover{ text-decoration:underline; }
+
+    .copy-btn{
+        flex-shrink:0; width:46px;
+        display:flex; align-items:center; justify-content:center;
+        background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09);
+        border-radius:12px; cursor:pointer; color:#c7c7cc;
+        transition:background .15s ease, color .15s ease;
+    }
+    .copy-btn:hover{ background:rgba(255,255,255,0.08); color:#fff; }
+    .copy-btn svg{ width:17px; height:17px; }
+
+    .origin{ font-size:11.5px; color:#6b6b70; margin-top:10px; display:flex; gap:6px; align-items:flex-start; }
+    .origin span.o-url{ color:#8f8f95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    footer{ text-align:center; margin-top:28px; }
+    footer .powered{
+        display:inline-flex; align-items:center; gap:7px;
+        font-family:'IBM Plex Mono',monospace; font-size:11px; color:#55555c;
+        letter-spacing:0.04em;
+    }
+    footer .powered b{ color:#8a8a8f; font-weight:500; }
+    footer .powered .glyph{ width:12px; height:12px; opacity:0.7; }
+
+    @media (prefers-reduced-motion: reduce){
+        *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+    }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+    <div class="brand">
+        <div class="brand-mark">
+            <div class="ear l"></div>
+            <div class="ear r"></div>
+            <div class="head"></div>
+        </div>
+        <div class="brand-text">
+            <div class="name">RabbitXMD</div>
+            <div class="tag">Link Shortener</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h1>Shrink a link</h1>
+        <p class="sub">Drop in a long URL, get back something you'd actually want to share.</p>
+
+        <form id="shortenForm">
+            <label for="urlInput">Destination URL</label>
+            <div class="field">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="18" height="18"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5 21 3m0 0h-5.25M21 3v5.25M11 5H6.2C5.08 5 4.52 5 4.092 5.218a2 2 0 0 0-.874.874C3 6.52 3 7.08 3 8.2v9.6c0 1.12 0 1.68.218 2.108a2 2 0 0 0 .874.874C4.52 21 5.08 21 6.2 21h9.6c1.12 0 1.68 0 2.108-.218a2 2 0 0 0 .874-.874C19 19.48 19 18.92 19 17.8V13"/></svg>
+                <input type="text" id="urlInput" placeholder="https://example.com/a/very/long/path" required autocomplete="off" spellcheck="false">
+            </div>
+
+            <button type="button" class="alias-toggle" id="toggleAlias">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                Custom alias
+            </button>
+
+            <div class="alias-wrap hidden" id="aliasWrap">
+                <div class="field">
+                    <span class="alias-prefix" id="aliasPrefix"></span>
+                    <input type="text" id="aliasInput" placeholder="my-link" maxlength="32" autocomplete="off" spellcheck="false">
+                </div>
+                <p class="hint">3–32 characters — letters, numbers, - or _</p>
+            </div>
+
+            <button type="submit" class="go-btn" id="submitBtn">
+                <svg id="submitIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15.75 15.75 8.25M9.5 6H7.25A3.25 3.25 0 0 0 4 9.25v0A3.25 3.25 0 0 0 7.25 12.5H9.5m5-6.5h2.25A3.25 3.25 0 0 1 20 9.25v0a3.25 3.25 0 0 1-3.25 3.25H14.5"/></svg>
+                <span id="submitLabel">Shorten link</span>
+            </button>
+        </form>
+
+        <div class="error" id="errorBox">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
+            <span id="errorText"></span>
+        </div>
+
+        <div class="result" id="resultCard">
+            <div class="result-label"><span class="dot"></span> Ready</div>
+            <div class="result-row">
+                <div class="result-box">
+                    <a id="resultUrl" href="#" target="_blank" rel="noopener"></a>
+                </div>
+                <button class="copy-btn" id="copyBtn" title="Copy" type="button">
+                    <svg id="copyIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75"/></svg>
+                </button>
+            </div>
+            <div class="origin">→ <span class="o-url" id="resultOriginal"></span></div>
+        </div>
+    </div>
+
+    <footer>
+        <span class="powered">
+            <svg class="glyph" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3 6.7 3.7L12 11.7 5.3 8 12 4.3Z"/></svg>
+            Powered by <b>RabbitXMD</b>
+        </span>
+    </footer>
+
+</div>
+
+<script>
+    const form = document.getElementById('shortenForm');
+    const urlInput = document.getElementById('urlInput');
+    const toggleAlias = document.getElementById('toggleAlias');
+    const aliasWrap = document.getElementById('aliasWrap');
+    const aliasPrefix = document.getElementById('aliasPrefix');
+    const aliasInput = document.getElementById('aliasInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const submitIcon = document.getElementById('submitIcon');
+    const submitLabel = document.getElementById('submitLabel');
+    const errorBox = document.getElementById('errorBox');
+    const errorText = document.getElementById('errorText');
+    const resultCard = document.getElementById('resultCard');
+    const resultUrl = document.getElementById('resultUrl');
+    const resultOriginal = document.getElementById('resultOriginal');
+    const copyBtn = document.getElementById('copyBtn');
+    const copyIcon = document.getElementById('copyIcon');
+
+    aliasPrefix.textContent = window.location.origin.replace(/^https?:\/\//, '') + '/';
+
+    toggleAlias.addEventListener('click', () => {
+        aliasWrap.classList.toggle('hidden');
+        if (!aliasWrap.classList.contains('hidden')) aliasInput.focus();
+    });
+
+    function setLoading(isLoading) {
+        submitBtn.disabled = isLoading;
+        submitIcon.classList.toggle('spin', isLoading);
+        submitLabel.textContent = isLoading ? 'Shortening…' : 'Shorten link';
+    }
+
+    function showError(msg) {
+        errorText.textContent = msg;
+        errorBox.classList.add('show');
+    }
+    function hideError() { errorBox.classList.remove('show'); }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideError();
+        resultCard.classList.remove('show');
+
+        const url = urlInput.value.trim();
+        const alias = aliasInput.value.trim();
+        if (!url) return;
+
+        setLoading(true);
+        try {
+            const params = new URLSearchParams({ url });
+            if (alias) params.set('name', alias);
+
+            const res = await fetch(`/api/shorten?${params.toString()}`);
+            const data = await res.json();
+
+            if (!data.success) {
+                showError(data.message || 'Could not shorten this link.');
+                return;
+            }
+
+            const short = data.result.url || data.result.short;
+            resultUrl.textContent = short.replace(/^https?:\/\//, '');
+            resultUrl.href = short;
+            resultOriginal.textContent = data.result.original || url;
+            resultCard.classList.add('show');
+        } catch (err) {
+            showError('Network error — please try again.');
+        } finally {
+            setLoading(false);
+        }
+    });
+
+    copyBtn.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(resultUrl.href);
+            copyIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>';
+            setTimeout(() => {
+                copyIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75"/>';
+            }, 1500);
+        } catch (err) {}
+    });
+</script>
+</body></html>
