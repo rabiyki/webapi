@@ -13,6 +13,7 @@
     "cheerio": "^1.0.0-rc.12",
     "express": "^4.19.2",
     "form-data": "^4.0.0",
+    "qrcode": "latest",
     "g-i-s": "^2.1.6",
     "jimp": "^1.6.0",
     "mongoose": "^8.5.1",
