@@ -92,7 +92,8 @@ router.all("/api/qr", async (req, res) => {
       success: false,
       code: 500,
       creator: CREATOR,
-      message: "Could not generate QR code. Please try again."
+      message: "Could not generate QR code. Please try again.",
+      debug: e.message // ⚠️ TEMPORARY — remove after debugging
     });
   }
 });
