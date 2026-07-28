@@ -72,6 +72,12 @@ app.use(neuropairRouter);
 app.use(shortenRouter); // URL shortener
 app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
 
+// ⚠️ TEMPORARY DIAGNOSTIC ROUTE — remove after debugging
+// If curl to /test1 shows "DIRECT HIT", basic routing works fine and
+// the problem is specific to proxy.js's custom regex param.
+// If it still 404s, something is intercepting the request before this.
+app.get("/test1", (req, res) => res.send("DIRECT HIT"));
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // SOCKET.IO
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
