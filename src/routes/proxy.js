@@ -7,9 +7,12 @@ const { noCache, safeDestroy } = require("../utils/http");
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🐇 SHORT-LINK STREAM PROXY
-//    Matches things like /12hsy.mp4, /aB3k9.jpg — 4-10 random chars
-//    followed by a real extension, OR a plain code with no extension
-//    (used by the /api/shorten URL shortener, e.g. /my-link).
+//    Two separate routes (NOT one with an optional group) because the
+//    legacy path-to-regexp bundled with Express 4 can't handle nested
+//    parentheses inside a custom :param(regex) constraint — using
+//    "(?:...)?" inside silently breaks route matching entirely.
+//      1) /12hsy.mp4, /aB3k9.jpg  -> file links (always have an extension)
+//      2) /my-link                -> plain shortener links (no extension)
 //    Must be mounted LAST in app.js so it never shadows your other
 //    page/API routes.
 //
@@ -78,7 +81,7 @@ async function streamFromHttp(url, req, res) {
   stream.pipe(res);
 }
 
-router.get("/:code([A-Za-z0-9_-]{3,32}(?:\\.[A-Za-z0-9]{2,5})?)", async (req, res) => {
+async function handleShortLink(req, res) {
   noCache(res);
 
   try {
@@ -106,6 +109,12 @@ router.get("/:code([A-Za-z0-9_-]{3,32}(?:\\.[A-Za-z0-9]{2,5})?)", async (req, re
   } catch (e) {
     res.status(404).json({ status: false, message: "File not found" });
   }
-});
+}
+
+// File links: code + a real extension, e.g. /12hsy.mp4, /aB3k9.jpg
+router.get("/:code([A-Za-z0-9]{4,10}\\.[A-Za-z0-9]{2,5})", handleShortLink);
+
+// Plain shortener links: code only, no extension, e.g. /my-link
+router.get("/:code([A-Za-z0-9_-]{3,32})", handleShortLink);
 
 module.exports = router;
