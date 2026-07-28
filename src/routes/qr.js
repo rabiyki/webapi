@@ -14,6 +14,10 @@ const { noCache } = require("../utils/http");
 //    Optional params: size (default 300), margin (default 2),
 //    color (foreground, hex, default "000000"), bgcolor (hex, default "ffffff"),
 //    ecc (error correction: L, M, Q, H — default "M")
+//
+//    Uses explicit callback-style calls (wrapped in a Promise), not
+//    QRCode's own promise API — some qrcode versions behave
+//    inconsistently with the no-callback form.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function parseOptions(req) {
@@ -34,9 +38,35 @@ function parseOptions(req) {
   };
 }
 
+function toBuffer(text, opts) {
+  return new Promise((resolve, reject) => {
+    QRCode.toBuffer(text, opts, (err, buf) => {
+      if (err) return reject(err);
+      resolve(buf);
+    });
+  });
+}
+
+function toDataURL(text, opts) {
+  return new Promise((resolve, reject) => {
+    QRCode.toDataURL(text, opts, (err, url) => {
+      if (err) return reject(err);
+      resolve(url);
+    });
+  });
+}
+
+function toSvgString(text, opts) {
+  return new Promise((resolve, reject) => {
+    QRCode.toString(text, { ...opts, type: "svg" }, (err, str) => {
+      if (err) return reject(err);
+      resolve(str);
+    });
+  });
+}
+
 router.get("/api/qr", async (req, res) => {
   noCache(res);
-  console.log("[qr] method:", req.method, "| query:", JSON.stringify(req.query));
   const text = req.query.text;
 
   if (!text) {
@@ -63,7 +93,7 @@ router.get("/api/qr", async (req, res) => {
 
   try {
     if (wantsJson) {
-      const dataUrl = await QRCode.toDataURL(text, opts);
+      const dataUrl = await toDataURL(text, opts);
       return res.json({
         success: true,
         code: 200,
@@ -77,12 +107,12 @@ router.get("/api/qr", async (req, res) => {
     }
 
     if (wantsSvg) {
-      const svg = await QRCode.toString(text, { ...opts, type: "svg" });
+      const svg = await toSvgString(text, opts);
       res.setHeader("Content-Type", "image/svg+xml");
       return res.send(svg);
     }
 
-    const buffer = await QRCode.toBuffer(text, opts);
+    const buffer = await toBuffer(text, opts);
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Content-Length", buffer.length);
     return res.send(buffer);
@@ -93,8 +123,7 @@ router.get("/api/qr", async (req, res) => {
       success: false,
       code: 500,
       creator: CREATOR,
-      message: "Could not generate QR code. Please try again.",
-      debug: (e && e.message) || String(e) // ⚠️ TEMPORARY — remove after debugging
+      message: "Could not generate QR code. Please try again."
     });
   }
 });
