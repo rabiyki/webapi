@@ -21,8 +21,9 @@ const toolsRouter = require("./src/routes/tools");
 const cdnRouter = require("./src/routes/cdn");
 const ghibliRouter = require("./src/routes/ghibli");
 const neuropairRouter = require("./src/routes/neuropair");
+const shortenRouter = require("./src/routes/shortlink"); // URL shortener (/api/shorten)
 const proxyRouter = require("./src/routes/proxy"); // short-link stream proxy — MUST stay last
-const shortenRouter = require("./src/routes/shortlink"); // URL shortener
+
 const app = express();
 app.disable("x-powered-by");
 
@@ -68,7 +69,7 @@ app.use(toolsRouter);
 app.use(cdnRouter);
 app.use(ghibliRouter);
 app.use(neuropairRouter);
-app.use(shortlinkRouter);
+app.use(shortenRouter); // URL shortener
 app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
