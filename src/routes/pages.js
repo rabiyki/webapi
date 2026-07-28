@@ -41,6 +41,10 @@ router.get("/terabox", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "..", "..", "public", "terabox.html"));
 });
+router.get("/shorten", (req, res) => {
+  noCache(res);
+  res.sendFile(path.join(__dirname, "..", "..", "public", "shorten.html"));
+});
 
 router.get("/upload", (req, res) => {
   noCache(res);
