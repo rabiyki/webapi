@@ -23,7 +23,7 @@ const ghibliRouter = require("./src/routes/ghibli");
 const neuropairRouter = require("./src/routes/neuropair");
 const shortenRouter = require("./src/routes/shortlink"); // URL shortener (/api/shorten)
 const proxyRouter = require("./src/routes/proxy"); // short-link stream proxy — MUST stay last
-
+const qrRouter = require("./src/routes/qr");
 const app = express();
 app.disable("x-powered-by");
 
@@ -71,12 +71,12 @@ app.use(ghibliRouter);
 app.use(neuropairRouter);
 app.use(shortenRouter); // URL shortener
 app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
-
+app.use(qrRouter);
 // ⚠️ TEMPORARY DIAGNOSTIC ROUTE — remove after debugging
 // If curl to /test1 shows "DIRECT HIT", basic routing works fine and
 // the problem is specific to proxy.js's custom regex param.
 // If it still 404s, something is intercepting the request before this.
-app.get("/test1", (req, res) => res.send("DIRECT HIT"));
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // SOCKET.IO
