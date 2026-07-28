@@ -34,9 +34,10 @@ function parseOptions(req) {
   };
 }
 
-router.all("/api/qr", async (req, res) => {
+router.get("/api/qr", async (req, res) => {
   noCache(res);
-  const text = req.query.text || (req.body && req.body.text);
+  console.log("[qr] method:", req.method, "| query:", JSON.stringify(req.query));
+  const text = req.query.text;
 
   if (!text) {
     return res.status(400).json({
