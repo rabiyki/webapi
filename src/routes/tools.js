@@ -7,6 +7,7 @@ const { noCache, ax, ssAgent, safeDestroy } = require("../utils/http");
 const { cacheBufferMedia } = require("../utils/cache");
 const { removeBgViaMagicStudio } = require("../utils/magicstudioRemoveBg");
 const { removeBgViaDeekuude } = require("../utils/undress");
+const { toOggOpus } = require("../utils/audioConvert");
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }
@@ -251,6 +252,66 @@ router.get("/api/lyrics", async (req, res) => {
     res.json({ status: false, creator: CREATOR });
   }
 });
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🔄 MP3 -> OGG CONVERTER
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+router.get("/api/tools/mp3toogg", async (req, res) => {
+  noCache(res);
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).json({
+      status: false, creator: CREATOR, message: "MP3 URL required"
+    });
+
+    const { buffer, contentType } = await toOggOpus(url);
+    const proxy = cacheBufferMedia(req, buffer, contentType, ".ogg");
+
+    res.json({
+      status: "success",
+      creator: CREATOR,
+      result: {
+        url: proxy
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: false, creator: CREATOR, message: err.message || "Failed to convert MP3 to OGG."
+    });
+  }
+});
+
+router.post("/api/tools/mp3toogg", upload.single("file"), async (req, res) => {
+  noCache(res);
+  try {
+    if (!req.file) return res.status(400).json({
+      status: false, creator: CREATOR, message: "MP3 file required"
+    });
+
+    const { buffer, contentType } = await toOggOpus(req.file.buffer);
+    const proxy = cacheBufferMedia(req, buffer, contentType, ".ogg");
+
+    res.json({
+      status: "success",
+      creator: CREATOR,
+      result: {
+        url: proxy
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: false, creator: CREATOR, message: err.message || "Failed to convert MP3 to OGG."
+    });
+  } finally {
+    if (req.file) req.file.buffer = null;
+  }
+});
+
+
+
+
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🎬 RANDOM LEAK VIDEO
