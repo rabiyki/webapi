@@ -27,7 +27,7 @@ function sanitizeFilename(name) {
 // mode: "redirect" -> /media/:file issues a 302 redirect straight to
 //                      the upstream URL instead of proxying it
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━
-function cacheMedia(req, sourceUrl, ext = ".mp4", ttlMs = 10 * 60 * 1000, mode = "stream", filename = null) {
+function cacheMedia(req, sourceUrl, ext = ".mp4", ttlMs = 10 * 60 * 1000, mode = "stream", filename = null, backupUrl = null) {
   if (!sourceUrl) return null;
 
   const id = randomId(5, ext);
@@ -37,6 +37,11 @@ function cacheMedia(req, sourceUrl, ext = ".mp4", ttlMs = 10 * 60 * 1000, mode =
 
   mediaCache.set(file, {
     url: sourceUrl,
+    // Only used in "stream" mode: if the primary url fails to respond
+    // (dead link, host down, etc.), /media/:file retries this one
+    // before giving up — source is still never exposed to the client
+    // either way, since both are streamed through, not redirected to.
+    backupUrl: backupUrl || null,
     mode,
     filename: cleanName ? `${cleanName}${ext}` : null
   });
