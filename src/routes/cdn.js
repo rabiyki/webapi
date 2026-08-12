@@ -166,24 +166,52 @@ const URL_HANDLERS = {
   "catbox": uploadUrlToCatbox
 };
 
+// Categories we actually check for a mismatch. Anything outside this
+// set (e.g. "application/zip") is left alone — too many legit hosts
+// respond with a generic/unrelated content-type for uncommon files.
+const CHECKED_TYPE_CATEGORIES = ["image", "video", "audio"];
+
 /**
  * Some backends (especially image-oriented file hosts) return a
  * "success" response with a URL even when that URL doesn't actually
- * serve the file — e.g. audio/video uploads that they silently reject
- * or purge. Without this check, that broken link gets shortened and
- * handed to the user as if it worked, and only 404s later when they
- * open it. mega.nz links are skipped (encrypted, can't HEAD them;
- * proxy.js streams those via the megajs SDK instead).
+ * serve the uploaded file — e.g. an audio/video upload gets silently
+ * rejected or purged, but the link they hand back still resolves to
+ * something (their own placeholder/error image, a different cached
+ * file, etc). A plain reachability check misses this entirely.
+ *
+ * So on top of "does the URL respond", this also confirms the
+ * response's real Content-Type is in the same category (image/video/
+ * audio) as what was uploaded — e.g. upload a video, get back a link
+ * that serves a jpeg -> treated as a failure, not a success.
+ *
+ * expectedTypePrefix: "image" | "video" | "audio" | ... (from the
+ * uploaded file's mimetype, before the "/"). Pass null/undefined to
+ * skip the category check (used for upload-by-url, where we don't
+ * know what type to expect ahead of time).
+ *
+ * mega.nz links are skipped entirely (encrypted, can't HEAD/GET them
+ * for a content-type; proxy.js streams those via the megajs SDK,
+ * which reads the true type from Mega's own file attributes instead).
  */
-async function verifyUrlIsReachable(url) {
-  if (MEGA_URL_RE.test(url)) return true;
+async function verifyUrlMatchesUpload(url, expectedTypePrefix) {
+  if (MEGA_URL_RE.test(url)) return { ok: true };
+
+  const categoryMismatch = (contentType) => {
+    if (!expectedTypePrefix || !contentType) return false;
+    const actualPrefix = contentType.split("/")[0].toLowerCase().trim();
+    if (!CHECKED_TYPE_CATEGORIES.includes(actualPrefix)) return false; // unrelated/generic type, don't block on it
+    return actualPrefix !== expectedTypePrefix.toLowerCase().trim();
+  };
 
   try {
-    const res = await ax.head(url, {
-      timeout: 15000,
-      validateStatus: () => true
-    });
-    if (res.status >= 200 && res.status < 400) return true;
+    const res = await ax.head(url, { timeout: 15000, validateStatus: () => true });
+    if (res.status >= 200 && res.status < 400) {
+      const contentType = res.headers["content-type"];
+      if (categoryMismatch(contentType)) {
+        return { ok: false, reason: `expected ${expectedTypePrefix}/*, got ${contentType}` };
+      }
+      return { ok: true };
+    }
   } catch (_) {
     // HEAD unsupported/blocked by some hosts — fall back to a ranged GET below
   }
@@ -196,20 +224,27 @@ async function verifyUrlIsReachable(url) {
       validateStatus: () => true
     });
     safeDestroy(res.data);
-    return res.status >= 200 && res.status < 400;
+    if (res.status < 200 || res.status >= 400) return { ok: false, reason: `status ${res.status}` };
+
+    const contentType = res.headers["content-type"];
+    if (categoryMismatch(contentType)) {
+      return { ok: false, reason: `expected ${expectedTypePrefix}/*, got ${contentType}` };
+    }
+    return { ok: true };
   } catch (_) {
-    return false;
+    return { ok: false, reason: "unreachable" };
   }
 }
 
 /**
  * Tries each provider (in random order) one by one.
- * Returns the first successful result whose URL actually resolves.
- * If every provider fails (or returns a dead link), throws an error
- * listing what went wrong on each one — this detail is for server
- * logs only, it never reaches the HTTP response.
+ * Returns the first successful result whose URL actually resolves
+ * AND actually serves the right kind of file (see
+ * verifyUrlMatchesUpload above). If every provider fails, throws an
+ * error listing what went wrong on each one — this detail is for
+ * server logs only, it never reaches the HTTP response.
  */
-async function tryProvidersInOrder(providers, handlers, arg) {
+async function tryProvidersInOrder(providers, handlers, arg, expectedTypePrefix = null) {
   const order = shuffle(providers);
   const errors = [];
 
@@ -217,9 +252,9 @@ async function tryProvidersInOrder(providers, handlers, arg) {
     try {
       const result = await handlers[provider](arg);
 
-      const reachable = await verifyUrlIsReachable(result.realUrl);
-      if (!reachable) {
-        errors.push(`${provider}: uploaded but link is not reachable`);
+      const check = await verifyUrlMatchesUpload(result.realUrl, expectedTypePrefix);
+      if (!check.ok) {
+        errors.push(`${provider}: ${check.reason}`);
         continue;
       }
 
@@ -245,7 +280,8 @@ async function uploadFile(file) {
     ? ["mega"]
     : FILE_PROVIDERS;
 
-  const { result } = await tryProvidersInOrder(providers, FILE_HANDLERS, file);
+  const expectedTypePrefix = file.mimetype ? file.mimetype.split("/")[0] : null;
+  const { result } = await tryProvidersInOrder(providers, FILE_HANDLERS, file, expectedTypePrefix);
   return result;
 }
 
