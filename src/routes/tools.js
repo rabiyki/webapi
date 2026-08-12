@@ -6,7 +6,6 @@ const { CREATOR } = require("../config");
 const { noCache, ax, ssAgent, safeDestroy } = require("../utils/http");
 const { cacheBufferMedia } = require("../utils/cache");
 const { removeBgViaMagicStudio } = require("../utils/magicstudioRemoveBg");
-const { removeBgViaDeekuude } = require("../utils/undress");
 const { toOggOpus } = require("../utils/audioConvert");
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -168,68 +167,7 @@ router.post("/api/removebg", upload.single("image"), async (req, res) => {
 });
 
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🖼️ REMOVE BACKGROUND (DEEKUUDE)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-router.get("/api/tools/undress", async (req, res) => {
-  noCache(res);
-  try {
-    const { url } = req.query;
-    if (!url) return res.status(400).json({
-      status: false, creator: CREATOR, message: "Image URL required"
-    });
-
-    const { buffer, contentType } = await removeBgViaDeekuude(req, url);
-    const proxy = cacheBufferMedia(req, buffer, contentType, ".png");
-
-    res.json({
-      status: "success",
-      creator: CREATOR,
-      result: {
-        url: proxy
-      }
-    });
-  } catch (err) {
-    res.status(500).json({
-      status: false,
-      creator: CREATOR,
-      message: "Failed to remove dress"
-    });
-  }
-});
-
-router.post("/api/tools/undress", upload.single("image"), async (req, res) => {
-  noCache(res);
-  try {
-    if (!req.file) return res.status(400).json({
-      status: false, creator: CREATOR, message: "Image file required"
-    });
-
-    const { buffer, contentType } = await removeBgViaDeekuude(
-      req,
-      req.file.buffer,
-      req.file.mimetype || "image/jpeg"
-    );
-    const proxy = cacheBufferMedia(req, buffer, contentType, ".png");
-
-    res.json({
-      status: "success",
-      creator: CREATOR,
-      result: {
-        url: proxy
-      }
-    });
-  } catch (err) {
-    res.status(500).json({
-      status: false,
-      creator: CREATOR,
-      message: "Failed to remove background"
-    });
-  } finally {
-    if (req.file) req.file.buffer = null;
-  }
-});
 
 
 
@@ -312,48 +250,5 @@ router.post("/api/tools/mp3toogg", upload.single("file"), async (req, res) => {
 
 
 
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🎬 RANDOM LEAK VIDEO
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-const GITHUB_MP4 = "https://raw.githubusercontent.com/xoo59568-art/newapi/refs/heads/main/database/leakvideo.json";
-
-router.get("/api/leak/terabox", async (req, res) => {
-  noCache(res);
-  let stream;
-  try {
-    const json = req.query.json === "true";
-
-    const { data } = await ax.get(GITHUB_MP4);
-
-    if (!Array.isArray(data) || data.length === 0) return res.status(404).json({
-      success: false, creator: CREATOR, message: "No video links found"
-    });
-
-    const random = data[Math.floor(Math.random() * data.length)];
-
-    if (json) return res.json({ success: true, creator: CREATOR, result: { url: random } });
-
-    const response = await axios({ url: random, method: "GET", responseType: "stream", timeout: 60000 });
-
-    stream = response.data;
-
-    res.setHeader("Content-Type", "video/mp4");
-    noCache(res);
-
-    stream.on("end",   () => safeDestroy(stream));
-    stream.on("close", () => safeDestroy(stream));
-    stream.on("error", () => safeDestroy(stream));
-
-    req.on("close",   () => safeDestroy(stream));
-    res.on("finish",  () => safeDestroy(stream));
-
-    stream.pipe(res);
-  } catch (e) {
-    safeDestroy(stream);
-    res.status(500).json({ success: false, creator: CREATOR, error: e.message });
-  }
-});
 
 module.exports = router;
