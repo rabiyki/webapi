@@ -5,7 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const FormData = require("form-data");
 const { CREATOR } = require("../config");
-const { noCache, ax } = require("../utils/http");
+const { noCache, ax, safeDestroy } = require("../utils/http");
 const { shortenLink, findExistingByHash } = require("../utils/shortlink");
 const { uploadFileToMega } = require("../utils/mega");
 
@@ -30,6 +30,8 @@ const upload = multer({
 //    which backends exist or why any of them failed (that detail is only
 //    logged server-side, never sent in the response).
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const MEGA_URL_RE = /^https?:\/\/mega\.nz\/(file|#!)/i;
 
 // Backends that accept a raw file upload
 const FILE_PROVIDERS = ["ar-hosting", "cdnfile", "nekohime", "catbox", "mega"];
@@ -165,10 +167,47 @@ const URL_HANDLERS = {
 };
 
 /**
+ * Some backends (especially image-oriented file hosts) return a
+ * "success" response with a URL even when that URL doesn't actually
+ * serve the file — e.g. audio/video uploads that they silently reject
+ * or purge. Without this check, that broken link gets shortened and
+ * handed to the user as if it worked, and only 404s later when they
+ * open it. mega.nz links are skipped (encrypted, can't HEAD them;
+ * proxy.js streams those via the megajs SDK instead).
+ */
+async function verifyUrlIsReachable(url) {
+  if (MEGA_URL_RE.test(url)) return true;
+
+  try {
+    const res = await ax.head(url, {
+      timeout: 15000,
+      validateStatus: () => true
+    });
+    if (res.status >= 200 && res.status < 400) return true;
+  } catch (_) {
+    // HEAD unsupported/blocked by some hosts — fall back to a ranged GET below
+  }
+
+  try {
+    const res = await ax.get(url, {
+      timeout: 15000,
+      responseType: "stream",
+      headers: { Range: "bytes=0-0" },
+      validateStatus: () => true
+    });
+    safeDestroy(res.data);
+    return res.status >= 200 && res.status < 400;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
  * Tries each provider (in random order) one by one.
- * Returns the first successful result. If every provider fails,
- * throws an error listing what went wrong on each one — this detail
- * is for server logs only, it never reaches the HTTP response.
+ * Returns the first successful result whose URL actually resolves.
+ * If every provider fails (or returns a dead link), throws an error
+ * listing what went wrong on each one — this detail is for server
+ * logs only, it never reaches the HTTP response.
  */
 async function tryProvidersInOrder(providers, handlers, arg) {
   const order = shuffle(providers);
@@ -177,6 +216,13 @@ async function tryProvidersInOrder(providers, handlers, arg) {
   for (const provider of order) {
     try {
       const result = await handlers[provider](arg);
+
+      const reachable = await verifyUrlIsReachable(result.realUrl);
+      if (!reachable) {
+        errors.push(`${provider}: uploaded but link is not reachable`);
+        continue;
+      }
+
       return { result, provider };
     } catch (e) {
       errors.push(`${provider}: ${e.message}`);
