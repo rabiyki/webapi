@@ -4,7 +4,27 @@ const axios = require("axios");
 const { CREATOR } = require("../config");
 const { noCache, ax, safeDestroy } = require("../utils/http");
 const { cacheMedia, mediaCache } = require("../utils/cache");
-const { fastYoutubeSearch, getSongResult } = require("../utils/youtube");
+const {
+  fastYoutubeSearch,
+  getSongResult,
+  fetchSongDavid,
+  fetchSongSavetube,
+  fetchSongVidssave,
+  fetchSongJerexd,
+  fetchSongJerry
+} = require("../utils/youtube");
+
+// Priority order used by /media/:file when a song stream needs to
+// live-fallback to another backend. "jerry" stays last on purpose —
+// it's the slowest/backup source, same as everywhere else in this file.
+const SONG_BACKENDS = {
+  david: fetchSongDavid,
+  savetube: fetchSongSavetube,
+  vidssave: fetchSongVidssave,
+  jerexd: fetchSongJerexd,
+  jerry: fetchSongJerry
+};
+const SONG_BACKEND_ORDER = ["david", "savetube", "vidssave", "jerexd", "jerry"];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // ▶️ PLAY API
@@ -34,7 +54,7 @@ router.get("/api/play", async (req, res) => {
 
     if (!video) return res.json({ status: false, creator: CREATOR, message: "No result found" });
 
-    // Reuse the exact same backend logic as /api/song (David -> Jerry fallback)
+    // Reuse the exact same backend logic as /api/song
     let songResult;
     try {
       songResult = await getSongResult(video.url);
@@ -42,18 +62,21 @@ router.get("/api/play", async (req, res) => {
       return res.json({ status: false, creator: CREATOR, message: "Audio fetch failed" });
     }
 
-    // NOTE: both David and Jerry now use "redirect" mode — /media/:file
-    // just 302s straight to the upstream URL instead of proxy-streaming
-    // it through this server. This avoids all proxy-side stream issues
-    // (timeouts, gzip/Content-Length mismatches, mid-stream cuts) since
-    // the client's player/downloader talks directly to the real source.
+    // "song-fallback" mode: /media/:file streams songResult.downloadUrl
+    // first. If that stream errors out before any bytes reach the
+    // client, it live-resolves the next backend in SONG_BACKEND_ORDER
+    // (skipping songResult.source, already tried) and retries — all
+    // inside the same request, same link. Only redirects once every
+    // backend has failed to stream.
     const proxy = cacheMedia(
       req,
       songResult.downloadUrl,
       ".mp3",
       10 * 60 * 1000,
-      "redirect",
-      video.title || songResult.title
+      "song-fallback",
+      video.title || songResult.title,
+      null,
+      { videoUrl: video.url, triedSource: songResult.source }
     );
     const thumbnail = cacheMedia(req, video.thumbnail, ".jpg");
 
@@ -245,18 +268,21 @@ router.get("/api/song", async (req, res) => {
       });
     }
 
-    // NOTE: both David and Jerry now use "redirect" mode — /media/:file
-    // just 302s straight to the upstream URL instead of proxy-streaming
-    // it through this server. This avoids all proxy-side stream issues
-    // (timeouts, gzip/Content-Length mismatches, mid-stream cuts) since
-    // the client's player/downloader talks directly to the real source.
+    // "song-fallback" mode: /media/:file streams result.downloadUrl
+    // first. If that stream errors out before any bytes reach the
+    // client, it live-resolves the next backend in SONG_BACKEND_ORDER
+    // (skipping result.source, already tried) and retries — all inside
+    // the same request, same link. Only redirects once every backend
+    // has failed to stream.
     const proxy = cacheMedia(
       req,
       result.downloadUrl,
       ".mp3",
       10 * 60 * 1000,
-      "redirect",
-      result.title || searchMeta?.title
+      "song-fallback",
+      result.title || searchMeta?.title,
+      null,
+      { videoUrl, triedSource: result.source }
     );
     const thumbnail = cacheMedia(req, result.thumbnail || searchMeta?.thumbnail || null, ".jpg");
 
@@ -293,6 +319,99 @@ router.get("/api/song", async (req, res) => {
 // / cacheBufferMedia across all routes
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+// Streams `url` to the client. Resolves true once piping has begun
+// (headers received, response is OK) — resolves false / throws if the
+// upstream request itself fails, so the caller can try the next
+// candidate. Once piping actually starts, errors are terminal (can't
+// switch source mid-stream to an already-flushed response).
+async function streamUrlToClient(req, res, url, filename) {
+  const response = await ax({
+    url,
+    method: "GET",
+    responseType: "stream",
+    timeout: 15000 // per-candidate connect/response timeout while probing
+  });
+
+  // Got a response — commit to this source. From here on, timeout: 0
+  // effectively applies since we just needed headers fast; the pipe
+  // itself has no timeout.
+  res.setHeader(
+    "Content-Type",
+    response.headers["content-type"] || "audio/mpeg"
+  );
+  if (filename) {
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  }
+
+  response.data.on("error", () => {
+    if (!res.headersSent) {
+      res.status(502).json({ success: false, error: "Upstream stream error" });
+    } else {
+      res.end();
+    }
+  });
+
+  req.on("close", () => safeDestroy(response.data));
+
+  response.data.pipe(res);
+}
+
+// Walks the song backend list live, trying to stream each candidate
+// in turn. `alreadyTried` is skipped since cacheMedia's stored `url`
+// is that backend's result and gets tried first, separately.
+async function streamSongWithFallback(req, res, entry) {
+  const { url: primaryUrl, meta, filename } = entry;
+  const order = SONG_BACKEND_ORDER.filter(name => name !== meta?.triedSource);
+
+  // 1) Try the already-resolved primary URL first — cheapest option,
+  //    no re-resolving needed.
+  try {
+    await streamUrlToClient(req, res, primaryUrl, filename);
+    return;
+  } catch (err) {
+    console.error(`[SONG STREAM] primary (${meta?.triedSource || "unknown"}) failed:`, err?.message || err);
+    if (res.headersSent) return; // already committed, nothing more to do
+  }
+
+  // 2) Walk the remaining backends live, resolving + streaming each.
+  let lastResolvedUrl = null;
+
+  for (const name of order) {
+    const fetchFn = SONG_BACKENDS[name];
+    if (!fetchFn || !meta?.videoUrl) continue;
+
+    let candidate;
+    try {
+      candidate = await fetchFn(meta.videoUrl);
+    } catch (err) {
+      console.error(`[SONG STREAM] resolve ${name} failed:`, err?.message || err);
+      continue;
+    }
+    if (!candidate?.downloadUrl) continue;
+
+    lastResolvedUrl = candidate.downloadUrl;
+
+    try {
+      await streamUrlToClient(req, res, candidate.downloadUrl, filename);
+      return;
+    } catch (err) {
+      console.error(`[SONG STREAM] stream ${name} failed:`, err?.message || err);
+      if (res.headersSent) return;
+    }
+  }
+
+  // 3) Every backend failed to stream. Last resort: redirect to
+  //    whatever URL we last managed to resolve (best effort), or the
+  //    original primary URL if nothing else ever resolved.
+  if (!res.headersSent) {
+    const fallbackUrl = lastResolvedUrl || primaryUrl;
+    if (fallbackUrl) {
+      return res.redirect(fallbackUrl);
+    }
+    return res.status(502).json({ success: false, message: "All sources failed" });
+  }
+}
+
 router.get("/media/:file", async (req, res) => {
   try {
 
@@ -317,15 +436,35 @@ router.get("/media/:file", async (req, res) => {
       return res.redirect(entry.url);
     }
 
-    // URL-based entry — proxy stream from the original source
-    const url = entry.url;
+    // Song-fallback entry — try to stream the resolved backend first;
+    // on failure, live-resolve + stream the next backend in priority
+    // order, all within this same request. Redirects only once every
+    // backend has failed to stream.
+    if (entry?.mode === "song-fallback") {
+      return await streamSongWithFallback(req, res, entry);
+    }
 
-    const response = await ax({
-      url,
-      method: "GET",
-      responseType: "stream",
-      timeout: 0 // override global 30s timeout — long audio needs more time
-    });
+    // Default "stream" mode — proxy stream from the original source,
+    // with a single backupUrl retry if the primary fails outright.
+    let url = entry.url;
+    let response;
+    try {
+      response = await ax({
+        url,
+        method: "GET",
+        responseType: "stream",
+        timeout: 0 // override global 30s timeout — long audio needs more time
+      });
+    } catch (err) {
+      if (!entry.backupUrl) throw err;
+      url = entry.backupUrl;
+      response = await ax({
+        url,
+        method: "GET",
+        responseType: "stream",
+        timeout: 0
+      });
+    }
 
     res.setHeader(
       "Content-Type",
