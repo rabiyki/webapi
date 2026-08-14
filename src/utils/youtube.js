@@ -1,5 +1,6 @@
 const { ax } = require("./http");
 const { JERRY_HEADERS } = require("../config");
+const CryptoJS = require("crypto-js");
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━
 // FAST YOUTUBE SEARCH
@@ -101,10 +102,16 @@ async function fastYoutubeSearch(query) {
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━
 // SONG BACKENDS
-// David = primary, Jerry = backup.
-// Both /api/song and /api/play call
-// getSongResult() so any backend added
-// here automatically applies to both.
+//
+// David, Savetube, Vidssave, and Jerexd are all raced
+// together via Promise.any() — whichever responds
+// successfully FIRST is used immediately.
+//
+// Jerry is kept as the FINAL fallback, only called if
+// every single one of the raced backends fails.
+//
+// Both /api/song and /api/play call getSongResult() so
+// any backend added here automatically applies to both.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 async function fetchSongDavid(url) {
@@ -124,6 +131,133 @@ async function fetchSongDavid(url) {
     thumbnail: data.data.cover,
     downloadUrl: data.data.download_url,
     source: "david"
+  };
+}
+
+// --- Savetube (media.savetube.vip) ---
+const SAVETUBE_KEY = "C5D58EF67A7584E4A29F6C35BBC4EB12";
+
+function savetubeDecrypt(base64) {
+  const raw = Buffer.from(base64, "base64");
+  const iv = raw.slice(0, 16);
+  const encrypted = raw.slice(16);
+  const key = CryptoJS.enc.Hex.parse(SAVETUBE_KEY);
+  const decrypted = CryptoJS.AES.decrypt(
+    { ciphertext: CryptoJS.lib.WordArray.create(encrypted) },
+    key,
+    {
+      iv: CryptoJS.lib.WordArray.create(iv),
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
+    }
+  );
+  return JSON.parse(decrypted.toString(CryptoJS.enc.Utf8));
+}
+
+async function fetchSongSavetube(url) {
+  const { data: cdnData } = await ax.get(
+    "https://media.savetube.vip/api/random-cdn",
+    { timeout: 8000 }
+  );
+  const cdn = cdnData?.cdn;
+  if (!cdn) throw new Error("no savetube cdn");
+
+  const { data: infoRes } = await ax.post(
+    `https://${cdn}/v2/info`,
+    { url },
+    { timeout: 10000 }
+  );
+  if (!infoRes?.status) throw new Error(infoRes?.message || "savetube info failed");
+
+  const info = savetubeDecrypt(infoRes.data);
+
+  const { data: dlRes } = await ax.post(
+    `https://${cdn}/download`,
+    { downloadType: "audio", quality: "128", key: info.key },
+    { timeout: 10000 }
+  );
+
+  const downloadUrl = dlRes?.data?.downloadUrl;
+  if (!downloadUrl) throw new Error("no savetube download url");
+
+  return {
+    title: info.title,
+    duration: info.durationLabel,
+    quality: "128kbps",
+    thumbnail: info.thumbnail,
+    downloadUrl,
+    source: "savetube"
+  };
+}
+
+// --- Vidssave (vidssave.com) ---
+const VIDSSAVE_URL = "https://api.vidssave.com/api/contentsite_api/media/parse";
+const VIDSSAVE_AUTH = "20250901majwlqo";
+const VIDSSAVE_DOMAIN = "api-ak.vidssave.com";
+
+function pickAudioResourceVidssave(mediaArr, preferredKbps = 128) {
+  const audioMedia = (mediaArr || []).find(m => m.media_id === "audio");
+  if (!audioMedia) return null;
+  const resources = (audioMedia.resources || []).filter(r => r.download_url);
+  if (!resources.length) return null;
+  const exact = resources.find(r => parseInt(r.quality, 10) === preferredKbps);
+  if (exact) return exact;
+  resources.sort((a, b) => parseInt(b.quality, 10) - parseInt(a.quality, 10));
+  return resources[0];
+}
+
+async function fetchSongVidssave(url) {
+  const params = new URLSearchParams();
+  params.append("auth", VIDSSAVE_AUTH);
+  params.append("domain", VIDSSAVE_DOMAIN);
+  params.append("origin", "source");
+  params.append("link", url);
+
+  const { data } = await ax.post(VIDSSAVE_URL, params, {
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: "https://vidssave.com",
+      referer: "https://vidssave.com/"
+    },
+    timeout: 12000
+  });
+
+  const result = data?.data;
+  if (!result) throw new Error("invalid vidssave response");
+
+  const audioRes = pickAudioResourceVidssave(result.media, 128);
+  if (!audioRes) throw new Error("no vidssave audio resource");
+
+  return {
+    title: result.title,
+    duration: result.duration,
+    quality: `${audioRes.quality}kbps`,
+    thumbnail: result.thumbnail,
+    downloadUrl: audioRes.download_url,
+    source: "vidssave"
+  };
+}
+
+// --- Jerexd (api.jerexd.my.id) ---
+const JEREXD_API_KEY = "jere_xMwutZzgpBcl";
+
+async function fetchSongJerexd(url) {
+  const { data } = await ax.get(
+    `https://api.jerexd.my.id/api/downloader/youtube?apikey=${JEREXD_API_KEY}&url=${encodeURIComponent(url)}&format=mp3`,
+    { timeout: 12000 }
+  );
+
+  if (!data?.status || !data?.result?.download) {
+    throw new Error("jerexd source unavailable");
+  }
+
+  return {
+    title: data.result.title,
+    duration: null,
+    quality: null,
+    thumbnail: null,
+    downloadUrl: data.result.download,
+    source: "jerexd"
   };
 }
 
@@ -147,12 +281,17 @@ async function fetchSongJerry(url) {
   };
 }
 
-// Tries each backend in order, first success wins.
-// Add more backends here later — just push another
-// try/catch step, nothing else needs to change.
+// David, Savetube, Vidssave, and Jerexd race together —
+// first successful response wins. Jerry is the last-resort
+// fallback, only tried if all four of those fail.
 async function getSongResult(videoUrl) {
   try {
-    return await fetchSongDavid(videoUrl);
+    return await Promise.any([
+      fetchSongDavid(videoUrl),
+      fetchSongSavetube(videoUrl),
+      fetchSongVidssave(videoUrl),
+      fetchSongJerexd(videoUrl)
+    ]);
   } catch (_) {}
 
   try {
@@ -166,5 +305,8 @@ module.exports = {
   fastYoutubeSearch,
   getSongResult,
   fetchSongDavid,
+  fetchSongSavetube,
+  fetchSongVidssave,
+  fetchSongJerexd,
   fetchSongJerry
 };
