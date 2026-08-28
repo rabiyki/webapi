@@ -103,7 +103,7 @@ async function fastYoutubeSearch(query) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━
 // SONG BACKENDS
 //
-// David, Savetube, Vidssave, and Jerexd are all raced
+// David, Savetube, and Jerexd are all raced
 // together via Promise.any() — whichever responds
 // successfully FIRST is used immediately.
 //
@@ -190,54 +190,6 @@ async function fetchSongSavetube(url) {
   };
 }
 
-// --- Vidssave (vidssave.com) ---
-const VIDSSAVE_URL = "https://api.vidssave.com/api/contentsite_api/media/parse";
-const VIDSSAVE_AUTH = "20250901majwlqo";
-const VIDSSAVE_DOMAIN = "api-ak.vidssave.com";
-
-function pickAudioResourceVidssave(mediaArr, preferredKbps = 128) {
-  const audioMedia = (mediaArr || []).find(m => m.media_id === "audio");
-  if (!audioMedia) return null;
-  const resources = (audioMedia.resources || []).filter(r => r.download_url);
-  if (!resources.length) return null;
-  const exact = resources.find(r => parseInt(r.quality, 10) === preferredKbps);
-  if (exact) return exact;
-  resources.sort((a, b) => parseInt(b.quality, 10) - parseInt(a.quality, 10));
-  return resources[0];
-}
-
-async function fetchSongVidssave(url) {
-  const params = new URLSearchParams();
-  params.append("auth", VIDSSAVE_AUTH);
-  params.append("domain", VIDSSAVE_DOMAIN);
-  params.append("origin", "source");
-  params.append("link", url);
-
-  const { data } = await ax.post(VIDSSAVE_URL, params, {
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-      origin: "https://vidssave.com",
-      referer: "https://vidssave.com/"
-    },
-    timeout: 12000
-  });
-
-  const result = data?.data;
-  if (!result) throw new Error("invalid vidssave response");
-
-  const audioRes = pickAudioResourceVidssave(result.media, 128);
-  if (!audioRes) throw new Error("no vidssave audio resource");
-
-  return {
-    title: result.title,
-    duration: result.duration,
-    quality: `${audioRes.quality}kbps`,
-    thumbnail: result.thumbnail,
-    downloadUrl: audioRes.download_url,
-    source: "vidssave"
-  };
-}
-
 // --- Jerexd (api.jerexd.my.id) ---
 const JEREXD_API_KEY = "jere_xMwutZzgpBcl";
 
@@ -281,15 +233,14 @@ async function fetchSongJerry(url) {
   };
 }
 
-// David, Savetube, Vidssave, and Jerexd race together —
+// David, Savetube, and Jerexd race together —
 // first successful response wins. Jerry is the last-resort
-// fallback, only tried if all four of those fail.
+// fallback, only tried if all three of those fail.
 async function getSongResult(videoUrl) {
   try {
     return await Promise.any([
       fetchSongDavid(videoUrl),
       fetchSongSavetube(videoUrl),
-      fetchSongVidssave(videoUrl),
       fetchSongJerexd(videoUrl)
     ]);
   } catch (_) {}
@@ -306,7 +257,6 @@ module.exports = {
   getSongResult,
   fetchSongDavid,
   fetchSongSavetube,
-  fetchSongVidssave,
   fetchSongJerexd,
   fetchSongJerry
 };
