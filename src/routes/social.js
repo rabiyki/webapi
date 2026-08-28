@@ -18,7 +18,7 @@ router.get("/api/instagram", async (req, res) => {
       `https://api-faa.my.id/faa/igdl?url=${encodeURIComponent(url)}`
     );
 
-    const proxy = cacheMedia(req, data.result, ".mp4");
+    const proxy = cacheMedia(req, data.result, ".mp4", 10 * 60 * 1000, "redirect");
 
     res.json({ status: true, creator: CREATOR, url: proxy });
   } catch {
@@ -36,8 +36,8 @@ router.get("/api/insta", async (req, res) => {
       `https://api-aswin-sparky.koyeb.app/api/downloader/igdl?url=${encodeURIComponent(url)}`
     );
 
-    const proxy = cacheMedia(req, data.data[0].url, ".mp4");
-    const thumbnail = cacheMedia(req, data.data[0].thumbnail, ".jpg");
+    const proxy = cacheMedia(req, data.data[0].url, ".mp4", 10 * 60 * 1000, "redirect");
+    const thumbnail = cacheMedia(req, data.data[0].thumbnail, ".jpg", 10 * 60 * 1000, "redirect");
 
     res.json({
       status: true,
@@ -61,8 +61,8 @@ router.get("/api/insta2", async (req, res) => {
     );
 
     const fileExt = data.ext ? `.${data.ext}` : ".mp4";
-    const proxy = cacheMedia(req, data.data[0].url, fileExt);
-    const thumbnail = cacheMedia(req, data.data[0].thumbnail, ".jpg");
+    const proxy = cacheMedia(req, data.data[0].url, fileExt, 10 * 60 * 1000, "redirect");
+    const thumbnail = cacheMedia(req, data.data[0].thumbnail, ".jpg", 10 * 60 * 1000, "redirect");
 
     res.json({
       status: true,
@@ -92,8 +92,8 @@ router.get("/api/fb", async (req, res) => {
       { timeout: 120000 }
     );
 
-    const hd = cacheMedia(req, data?.data?.high || null, ".mp4");
-    const sd = cacheMedia(req, data?.data?.low || null, ".mp4");
+    const hd = cacheMedia(req, data?.data?.high || null, ".mp4", 10 * 60 * 1000, "redirect");
+    const sd = cacheMedia(req, data?.data?.low || null, ".mp4", 10 * 60 * 1000, "redirect");
 
     res.json({
       status: true,
@@ -118,7 +118,7 @@ router.get("/api/fb2", async (req, res) => {
       `https://apiskeith.top/download/fbdown?url=${encodeURIComponent(url)}`
     );
 
-    const proxy = cacheMedia(req, data.result, ".mp4");
+    const proxy = cacheMedia(req, data.result, ".mp4", 10 * 60 * 1000, "redirect");
 
     res.json({ status: true, creator: CREATOR, result: proxy });
   } catch {
@@ -136,8 +136,8 @@ router.get("/api/fb3", async (req, res) => {
       `https://rabbitapi.nett.to/api/fb?url=${encodeURIComponent(url)}`
     );
 
-    const sd = cacheMedia(req, data.sd, ".mp4");
-    const hd = cacheMedia(req, data.hd, ".mp4");
+    const sd = cacheMedia(req, data.sd, ".mp4", 10 * 60 * 1000, "redirect");
+    const hd = cacheMedia(req, data.hd, ".mp4", 10 * 60 * 1000, "redirect");
 
     res.json({ status: true, creator: CREATOR, sd, hd });
   } catch {
@@ -155,7 +155,7 @@ router.get("/api/facebook", async (req, res) => {
       `https://apis.davidcyril.name.ng/facebook2?url=${encodeURIComponent(url)}`
     );
 
-    const proxy = cacheMedia(req, data.video, ".mp4");
+    const proxy = cacheMedia(req, data.video, ".mp4", 10 * 60 * 1000, "redirect");
 
     res.json({ status: true, creator: CREATOR, result: proxy });
   } catch {
