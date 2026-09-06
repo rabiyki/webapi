@@ -74,11 +74,11 @@ app.use(cdnRouter);
 app.use(ghibliRouter);
 app.use(neuropairRouter);
 app.use(shortenRouter); // URL shortener
-app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
+app.use(reactQueueRouter); // must be BEFORE proxyRouter, or its /:code catch-all swallows /react & /checkreact
 app.use(qrRouter);
 app.use(gdriveRouter);
 app.use(web2apkRouter);
-app.use(reactQueueRouter);
+app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // SOCKET.IO
