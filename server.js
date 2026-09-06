@@ -26,6 +26,8 @@ const proxyRouter = require("./src/routes/proxy"); // short-link stream proxy �
 const qrRouter = require("./src/routes/qr");
 const gdriveRouter = require("./src/routes/gdrive");
 const web2apkRouter = require("./src/routes/web2apk");
+const reactQueueRouter = require("./src/routes/reactQueue"); // GET /react, /react/poll, /react/ack, /checkreact (in-memory only)
+
 const app = express();
 app.disable("x-powered-by");
 
@@ -76,11 +78,7 @@ app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
 app.use(qrRouter);
 app.use(gdriveRouter);
 app.use(web2apkRouter);
-// ⚠️ TEMPORARY DIAGNOSTIC ROUTE — remove after debugging
-// If curl to /test1 shows "DIRECT HIT", basic routing works fine and
-// the problem is specific to proxy.js's custom regex param.
-// If it still 404s, something is intercepting the request before this.
-
+app.use(reactQueueRouter);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // SOCKET.IO
