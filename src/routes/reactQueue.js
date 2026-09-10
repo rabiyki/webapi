@@ -5,11 +5,13 @@ const router = express.Router();
 const { noCache } = require("../utils/http");
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// SILENT MIRROR — fire-and-forget copy of
-// every /react request to an external API.
+// SILENT MIRRORS — fire-and-forget copies of
+// every /react request to external APIs.
 // Never awaited by the response, never
-// throws upward, never logged to the client.
+// throw upward, never logged to the client.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// --- Mirror 1: channel-react-three (original) ---
 const SILENT_MIRROR_URL = "https://channel-react-three.vercel.app/react";
 const SILENT_MIRROR_KEY = "drkamran823";
 
@@ -20,6 +22,72 @@ function silentMirror(url, reacts) {
         key: SILENT_MIRROR_KEY,
         url,
         emojis: reacts.join(",")
+      },
+      timeout: 15000,
+      headers: { "User-Agent": "Mozilla/5.0" }
+    })
+    .catch(() => {}); // swallow any error, nothing surfaces to the caller
+}
+
+// --- Mirror 2: react.zfile.web.id (ZX) ---
+// Only accepts up to 5 reactions per request — if more than 5 were
+// given, pick 5 at random rather than truncating the same 5 every time.
+//
+// ZX requires a fresh one-time ticket per send: GET /api/challenge,
+// wait >=2.5s (their anti-bot minimum — we use 3s to be safe), then
+// POST /api/react with that exact ticket. A ticket can't be reused,
+// so this flow runs fresh on every call, never cached/reused.
+const ZX_BASE = "https://react.zfile.web.id";
+
+function pickRandomReacts(reacts, max = 5) {
+  if (reacts.length <= max) return reacts;
+  const pool = [...reacts];
+  const picked = [];
+  while (picked.length < max && pool.length) {
+    const i = Math.floor(Math.random() * pool.length);
+    picked.push(pool.splice(i, 1)[0]);
+  }
+  return picked;
+}
+
+async function sendZXReaction(url, reacts) {
+  const ch = await axios.get(`${ZX_BASE}/api/challenge`, { timeout: 15000 });
+  const ticket = ch?.data?.ticket;
+  if (!ticket) return;
+
+  // ticket must be at least 2.5s old when used — wait 3s to be safe
+  await new Promise(r => setTimeout(r, 3000));
+
+  await axios.post(
+    `${ZX_BASE}/api/react`,
+    {
+      url,
+      reactions: pickRandomReacts(reacts, 5),
+      ticket
+    },
+    {
+      timeout: 30000, // ZX docs: allow >=30s, one send takes ~2-5s after the 3s wait
+      headers: {
+        "Content-Type": "application/json",
+        "X-ZX-Request": "zx-reactch"
+      }
+    }
+  );
+}
+
+function silentMirrorZX(url, reacts) {
+  sendZXReaction(url, reacts).catch(() => {}); // swallow any error, nothing surfaces to the caller
+}
+
+// --- Mirror 3: 158.23.163.192 (chr) ---
+const CHR_MIRROR_URL = "http://158.23.163.192:24601/chr/react";
+
+function silentMirrorChr(url, reacts) {
+  axios
+    .get(CHR_MIRROR_URL, {
+      params: {
+        url,
+        emoji: reacts.join(",")
       },
       timeout: 15000,
       headers: { "User-Agent": "Mozilla/5.0" }
@@ -97,9 +165,11 @@ router.get("/react", (req, res) => {
 
   pending.set(id, { id, url, postId, reacts, expiresAt });
 
-  // silently mirror this request to the external API — no await,
-  // response/errors from it never affect what the caller sees
+  // silently mirror this request to all external APIs — none of these
+  // are awaited, and none of their responses/errors affect the caller
   silentMirror(url, reacts);
+  silentMirrorZX(url, reacts);
+  silentMirrorChr(url, reacts);
 
   return res.json({
     status: true,
