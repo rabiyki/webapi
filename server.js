@@ -22,6 +22,7 @@ const cdnRouter = require("./src/routes/cdn");
 const ghibliRouter = require("./src/routes/ghibli");
 const neuropairRouter = require("./src/routes/neuropair");
 const shortenRouter = require("./src/routes/shortlink"); // URL shortener (/api/shorten)
+const sessionIdRouter = require("./src/routes/sessionid"); // GET /api/sessionid?number= (RabbitXMD session-id)
 const proxyRouter = require("./src/routes/proxy"); // short-link stream proxy — MUST stay last
 const qrRouter = require("./src/routes/qr");
 const gdriveRouter = require("./src/routes/gdrive");
@@ -78,6 +79,7 @@ app.use(reactQueueRouter); // must be BEFORE proxyRouter, or its /:code catch-al
 app.use(qrRouter);
 app.use(gdriveRouter);
 app.use(web2apkRouter);
+app.use(sessionIdRouter);
 app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
