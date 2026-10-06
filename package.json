@@ -7,7 +7,8 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "latest",
+    "@whiskeysockets/baileys": "github:motherchod-code/elaina-baileys",
+    "awesome-phonenumber": "^5.9.0",
     "axios": "^1.7.2",
     "megajs": "latest",
     "cheerio": "^1.0.0-rc.12",
