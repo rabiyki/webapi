@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════
 //  RabbitXMD Session-ID generator
 //  GET /api/sessionid?number=91XXXXXXXXXX  → { code: "RABB-ITXD" }
-//  Pairing hole WhatsApp e creds.json MEGA te upload hoy ebong
+//  Pairing hole WhatsApp er creds.json MongoDB te save hoy (24h por auto-delete) ebong
 //  user ke "RabbitXMD~<id>" session-id pathano hoy.
 // ═══════════════════════════════════════════════════════════════
 
@@ -131,9 +131,9 @@ router.get("/api/sessionid", async (req, res) => {
           try {
             const credsFile = `${dirs}/creds.json`;
             if (fs.existsSync(credsFile)) {
-              const megaSessionId = randomSid(); // (variable name rakha holo, ekhon MongoDB id)
+              const sid = randomSid();
               await Session.create({
-                sid: megaSessionId,
+                sid,
                 creds: (await fs.promises.readFile(credsFile)).toString("utf-8"),
               });
               const userJid = jidNormalizedUser(num + "@s.whatsapp.net");
@@ -181,7 +181,7 @@ router.get("/api/sessionid", async (req, res) => {
               await sock.relayMessage(userJid, interactiveMsg.message, { messageId: interactiveMsg.key.id });
 
               // ===== Session ID message with prefix + copy button =====
-              const prefixedSessionId = `ʀᴀʙʙɪᴛxᴍᴅ~${megaSessionId}`;
+              const prefixedSessionId = `ʀᴀʙʙɪᴛxᴍᴅ~${sid}`;
 
               const sessionText = `*🔖ʏᴏᴜʀ sᴇssɪᴏɴ-ɪᴅ ɢᴀɴᴀʀᴀᴛᴇ sᴜᴄᴇssғᴜʟʟ !*
 
