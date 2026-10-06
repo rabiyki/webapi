@@ -66,6 +66,11 @@ router.get("/removebg", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "..", "public", "removebg.html"));
 });
 
+router.get("/session", (req, res) => {
+  noCache(res);
+  res.sendFile(path.join(__dirname, "..", "..", "public", "sessionid.html"));
+});
+
 router.get("/api.html", (req, res) => {
   noCache(res);
   res.sendFile(path.join(__dirname, "..", "..", "public", "api.html"));
