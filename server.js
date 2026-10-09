@@ -20,6 +20,7 @@ const pinterestRouter = require("./src/routes/pinterest");
 const toolsRouter = require("./src/routes/tools");
 const cdnRouter = require("./src/routes/cdn");
 const ghibliRouter = require("./src/routes/ghibli");
+const editImgRouter = require("./src/routes/editimg"); // NEW: GET|POST /api/editimg (streamed AI image edit)
 const neuropairRouter = require("./src/routes/neuropair");
 const shortenRouter = require("./src/routes/shortlink"); // URL shortener (/api/shorten)
 const sessionIdRouter = require("./src/routes/sessionid"); // GET /api/sessionid?number= (RabbitXMD session-id)
@@ -73,6 +74,7 @@ app.use(pinterestRouter);
 app.use(toolsRouter);
 app.use(cdnRouter);
 app.use(ghibliRouter);
+app.use(editImgRouter); // NEW
 app.use(neuropairRouter);
 app.use(shortenRouter); // URL shortener
 app.use(reactQueueRouter); // must be BEFORE proxyRouter, or its /:code catch-all swallows /react & /checkreact
