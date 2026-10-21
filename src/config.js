@@ -13,7 +13,7 @@ const JERRY_HEADERS = {
 
 const PORT = process.env.PORT || 4000;
 
-const MONGODB_URI = process.env.MONGODB_URI || "YOUR_MONGODB_URI_HERE";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://mrrabbit:sreejan900@cluster0.we4bxzg.mongodb.net/?appName=Cluster0";
 
 // Telegram user-account (GramJS) — used by /api/ffgrp and /api/rabbitd.
 // Env vars override these defaults.
