@@ -17,9 +17,9 @@ const MONGODB_URI = process.env.MONGODB_URI || "YOUR_MONGODB_URI_HERE";
 
 // Telegram user-account (GramJS) — used by /api/ffgrp and /api/rabbitd.
 // Env vars override these defaults.
-const TG_API_ID = parseInt(process.env.TG_API_ID || "YOUR_API_ID", 10);
-const TG_API_HASH = process.env.TG_API_HASH || "YOUR_API_HASH";
-const TG_SESSION = process.env.TG_SESSION || "YOUR_SESSION_STRING";
+const TG_API_ID = parseInt(process.env.TG_API_ID || "34777125", 10);
+const TG_API_HASH = process.env.TG_API_HASH || "04bc8d11d6cb656379122be02439cc5e";
+const TG_SESSION = process.env.TG_SESSION || "1BQANOTEuMTA4LjU2LjE0MAG7S0mq0IDt1yQKTIwOGmsMRsLaH7AZ/XppveeaQ0sllYk1FH1veWta7jQLk2Ra/8zw1iXB1nC1f+BRG2J9C4liezklibrsujXLZndLGpIcOzic5dAZbGgHuRW3dTobn8qZB/DrlQFbetBiB3uPKr8HUFJq/uVDooUmRoQ4P61MIppanPu6UVb+8HmOpnfYEyXF3cKKn7l1oAoZXOHpCxVV8EAf+bS5l7/wXnQMcf7a8SquOdpMvkvpSi5Dgk88miRY2DW3QK3JW+CnYXXzczn/RZbY6uxoS0ZAeFCFKJqn3Qnox1YiTrzxI+y1TXwOO17txNdwLNAveBZaV80GH+1p6A==";
 const TG_EMOTE_BOT = process.env.TG_EMOTE_BOT || "FFEmoteByShadow_Bot";
 const TG_INFO_BOT = process.env.TG_INFO_BOT || "@Randominsight_bot"; // /api/rabbitd
 
