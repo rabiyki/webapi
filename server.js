@@ -25,7 +25,7 @@ const neuropairRouter = require("./src/routes/neuropair");
 const shortenRouter = require("./src/routes/shortlink"); // URL shortener (/api/shorten)
 const sessionIdRouter = require("./src/routes/sessionid"); // GET /api/sessionid?number= (RabbitXMD session-id)
 const ffGroupRouter = require("./src/routes/ffgrp"); // GET|POST /api/ffgrp?command=5g|6g&number=UID (Telegram emote bot)
-const rabbitdRouter = require("./src/routes/rabbitd"); // GET|POST /api/rabbitd?number=ID (Telegram info bot → file content)
+const infoRouter = require("./src/routes/info"); // GET|POST /api/info?number=ID (Telegram info bot → file content)
 const proxyRouter = require("./src/routes/proxy"); // short-link stream proxy — MUST stay last
 const qrRouter = require("./src/routes/qr");
 const gdriveRouter = require("./src/routes/gdrive");
@@ -85,7 +85,7 @@ app.use(gdriveRouter);
 app.use(web2apkRouter);
 app.use(sessionIdRouter);
 app.use(ffGroupRouter);
-app.use(rabbitdRouter);
+app.use(infoRouter);
 app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
