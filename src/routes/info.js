@@ -21,10 +21,12 @@ const TEXT_GRACE = 6000;              // final-looking text with no file → wai
 const FILE_GRACE = 2500;              // after a file → wait this long for more files/messages
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const OWNER = "MR RABBIT";
+const NO_RESULT = "No result found";
 
 const ENDPOINTS = [
   { path: "/api/info",       command: "/num {q}" },                                                       // mobile number
   { path: "/api/familyinfo",  command: "/familyinfo {q}", pattern: /^\d{12}$/ },                           // aadhar (12 digits)
+  { path: "/api/aadhar",      command: "/aadhar {q}",     pattern: /^\d{12}$/ },                            // aadhar UID (12 digits)
   { path: "/api/vnum",        command: "/vnum {q}",       pattern: /^[A-Za-z0-9]{4,15}$/, upper: true },   // vehicle plate
   { path: "/api/paknum",      command: "/paknum {q}" },                                                    // pakistan number
   { path: "/api/pincode",     command: "/pincode {q}",    pattern: /^\d{6}$/ },                             // pincode (6 digits)
@@ -103,8 +105,8 @@ const makeHandler = (ep) => async (req, res) => {
     const r = await enqueue("info", () => askBot(ep.bot || TG_INFO_BOT, ep.command.replace("{q}", () => id)));
 
     if (!r.files.length) {
-      const reply = r.messages.filter((t) => !INTERIM.test(t)).join("\n").trim();
-      return res.status(404).json({ success: false, id, error: reply || "No data received", messages: r.messages });
+      // Whatever the bot says (not found, error, etc.) → always the same message.
+      return res.status(404).json({ success: false, id, error: NO_RESULT });
     }
 
     // Binary file (image etc.) → can't be shown as text, return it as base64.
@@ -130,6 +132,10 @@ const makeHandler = (ep) => async (req, res) => {
       .type("application/json")
       .send(JSON.stringify({ success: true, Owner: OWNER, id, info: lines }, null, 2));
   } catch (e) {
+    // Bot never replied → also "no result".
+    if (/did not reply in time/i.test(e.message || "")) {
+      return res.status(404).json({ success: false, id, error: NO_RESULT });
+    }
     return res.status(500).json({ success: false, error: e.message || "Request failed" });
   }
 };
