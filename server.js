@@ -48,7 +48,7 @@ global.botSockets = new Map();
 
 app.set("trust proxy", true);
 
-// IP ban + request log — সব route-এর আগে
+// IP ban + request log: must come before all routes
 app.use(banMiddleware);
 app.use(logMiddleware);
 
