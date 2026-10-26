@@ -4,6 +4,8 @@ const { Server } = require("socket.io");
 
 const { PORT } = require("./src/config");
 const { connectDB } = require("./src/db");
+const { banMiddleware, logMiddleware, loadBans } = require("./src/utils/ipGuard");
+const { startAdminBot } = require("./src/utils/adminBot");
 const { warmConnections } = require("./src/utils/http");
 const { attachSocketHandlers } = require("./src/socket");
 
@@ -46,6 +48,10 @@ global.botSockets = new Map();
 
 app.set("trust proxy", true);
 
+// IP ban + request log — সব route-এর আগে
+app.use(banMiddleware);
+app.use(logMiddleware);
+
 // Needed for /api/neuropair/pair, which accepts { phone, imageBase64 } as JSON.
 // (Other routes use multer for multipart uploads and don't need this.)
 app.use(express.json({ limit: "25mb" }));
@@ -57,9 +63,14 @@ app.use(express.static(__dirname + "/public"));
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // MONGODB
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-connectDB().catch((err) => {
-  console.error("❌ MongoDB connection failed:", err.message);
-});
+connectDB()
+  .then(async () => {
+    await loadBans();
+    startAdminBot();
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB connection failed:", err.message);
+  });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // MOUNT ROUTES
