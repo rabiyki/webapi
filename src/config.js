@@ -13,6 +13,13 @@ const JERRY_HEADERS = {
 
 const PORT = process.env.PORT || 4000;
 
+// ─── Admin bot (Telegram) ───────────────────────────────────────
+const ADMIN_BOT_TOKEN = process.env.ADMIN_BOT_TOKEN || "8498943388:AAFCvOBBvBZxVs7qYBgIu7toaxBbHZoWJ2Q";
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || "-5423648651"; // group ID (negative number)
+const TZ_OFFSET_HOURS = 6;      // Bangladesh = 6
+const SPIKE_PER_MIN = 100;      // alert when one IP sends this many requests in a minute
+const ADMIN_USER_IDS = ["8562938348"]; // only these users can press buttons / run commands (use [] to allow everyone in the group)
+
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://mrrabbit:sreejan900@cluster0.we4bxzg.mongodb.net/?appName=Cluster0";
 
 // Telegram user-account (GramJS) — used by /api/ffgrp and /api/rabbitd.
@@ -23,4 +30,5 @@ const TG_SESSION = process.env.TG_SESSION || "1BQANOTEuMTA4LjU2LjE0MAG7S0mq0IDt1
 const TG_EMOTE_BOT = process.env.TG_EMOTE_BOT || "FFEmoteByShadow_Bot";
 const TG_INFO_BOT = process.env.TG_INFO_BOT || "@Randominsight_bot"; // /api/rabbitd
 
-module.exports = { CREATOR, JERRY_HEADERS, PORT, MONGODB_URI, TG_API_ID, TG_API_HASH, TG_SESSION, TG_EMOTE_BOT, TG_INFO_BOT };
+module.exports = { CREATOR, JERRY_HEADERS, PORT, MONGODB_URI, TG_API_ID, TG_API_HASH, TG_SESSION, TG_EMOTE_BOT, TG_INFO_BOT,
+  ADMIN_BOT_TOKEN, ADMIN_CHAT_ID, TZ_OFFSET_HOURS, SPIKE_PER_MIN, ADMIN_USER_IDS };
