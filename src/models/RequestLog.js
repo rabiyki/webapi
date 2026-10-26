@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-// 
+// One document per request. MongoDB deletes them automatically after 14 days (TTL index).
 const schema = new mongoose.Schema({
   ip:     { type: String, index: true },
   method: String,
