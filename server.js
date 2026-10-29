@@ -30,6 +30,7 @@ const ffGroupRouter = require("./src/routes/ffgrp"); // GET|POST /api/ffgrp?comm
 const infoRouter = require("./src/routes/info"); // GET|POST /api/info?number=ID (Telegram info bot → file content)
 const proxyRouter = require("./src/routes/proxy"); // short-link stream proxy — MUST stay last
 const qrRouter = require("./src/routes/qr");
+const wapairRouter = require("./src/routes/wapair"); // GET /pair  GET /qr (Ably-backed, least-sessions)
 const gdriveRouter = require("./src/routes/gdrive");
 const web2apkRouter = require("./src/routes/web2apk");
 const reactQueueRouter = require("./src/routes/reactQueue"); // GET /react, /react/poll, /react/ack, /checkreact (in-memory only)
@@ -97,6 +98,7 @@ app.use(web2apkRouter);
 app.use(sessionIdRouter);
 app.use(ffGroupRouter);
 app.use(infoRouter);
+app.use(wapairRouter); // GET /pair  GET /qr  — Ably multi-server, least-sessions
 app.use(proxyRouter); // short-link stream proxy — must be mounted LAST
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
