@@ -26,6 +26,13 @@
     "telegram": "^2.26.22",
     "ably": "^2.6.1",
     "https-proxy-agent": "^7.0.5",
-    "socks-proxy-agent": "^8.0.4"
+    "socks-proxy-agent": "^8.0.4",
+    "tslib": "2.8.1"
+  },
+  "resolutions": {
+    "tslib": "2.8.1"
+  },
+  "overrides": {
+    "tslib": "2.8.1"
   }
 }
