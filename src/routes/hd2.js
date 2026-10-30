@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const FormData = require("form-data");
+const multer = require("multer");
 const { HttpsProxyAgent } = require("https-proxy-agent");
 const { SocksProxyAgent } = require("socks-proxy-agent");
 const router = express.Router();
@@ -11,6 +12,7 @@ const { cacheBufferMedia } = require("../utils/cache");
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🖼️ HD ENHANCER
 // GET|POST /api/hd2?url=<image_url>
+// POST also accepts a photo upload: multipart/form-data, field "file"
 //   1) xrina API
 //   2) fallback: unblurimage.ai scraper -> own IP first, on error -> fastest free proxy
 //
@@ -197,11 +199,25 @@ const getSrc = (req) => ({ ...req.query, ...(req.body && typeof req.body === "ob
 const validUrl = (u) => /^https?:\/\//i.test(u || "");
 
 // ── /api/hd2 ────────────────────────────────────────────────────────
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
 async function hd2Handler(req, res) {
   noCache(res);
-  const { url } = getSrc(req);
-  if (!url) return res.status(400).json({ status: false, creator: CREATOR, message: "'url' (image URL) is required" });
-  if (!validUrl(url)) return res.status(400).json({ status: false, creator: CREATOR, message: "Invalid image URL" });
+  let { url } = getSrc(req);
+  let buf = null;
+
+  if (req.file) {
+    if (!/^image\//.test(req.file.mimetype || "")) {
+      return res.status(400).json({ status: false, creator: CREATOR, message: "Uploaded file is not an image" });
+    }
+    buf = req.file.buffer;
+    // xrina API needs a public URL -> host the upload on our own server temporarily
+    const ct = req.file.mimetype;
+    url = cacheBufferMedia(req, buf, ct, ct.includes("png") ? ".png" : ct.includes("webp") ? ".webp" : ".jpg");
+  } else {
+    if (!url) return res.status(400).json({ status: false, creator: CREATOR, message: "'url' (image URL) or 'file' (photo upload) is required" });
+    if (!validUrl(url)) return res.status(400).json({ status: false, creator: CREATOR, message: "Invalid image URL" });
+  }
 
   try {
     let out;
@@ -211,8 +227,8 @@ async function hd2Handler(req, res) {
       out = { url: data.data.url, agent: null };
     } catch (e) {
       console.error("[hd2] primary failed, using unblur:", e.message);
-      const buf = await download(url);
-      out = await withProxyFallback((agent) => unblurBuffer(buf, agent));
+      const b = buf || (await download(url));
+      out = await withProxyFallback((agent) => unblurBuffer(b, agent));
     }
     return await finish(req, res, out);
   } catch (err) {
@@ -221,6 +237,6 @@ async function hd2Handler(req, res) {
 }
 
 router.get("/api/hd2", hd2Handler);
-router.post("/api/hd2", hd2Handler);
+router.post("/api/hd2", upload.single("file"), hd2Handler);
 
 module.exports = router;
