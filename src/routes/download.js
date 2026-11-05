@@ -3,6 +3,8 @@ const router = express.Router();
 const { CREATOR } = require("../config");
 const { noCache, ax } = require("../utils/http");
 const { cacheMedia } = require("../utils/cache");
+const { fastYoutubeSearch } = require("../utils/youtube");
+const { getVideoResult, normalizeQuality } = require("../utils/ytvideo");
 
 
 
@@ -181,45 +183,108 @@ router.get("/teraboxv2", async (req, res) => {
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🎥 YOUTUBE DOWNLOADER
+// 🎥 YOUTUBE MP4 (search + link, like /api/song)
+//   /api/ytmp4?q=name | ?url=link  [&quality=144..1080]
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 router.get("/api/ytmp4", async (req, res) => {
   noCache(res);
-  try {
-    const { url } = req.query;
-    if (!url) return res.status(400).json({ status: false, creator: CREATOR, message: "YouTube URL is required" });
 
-    const { data } = await ax.get(
-      `https://bunny-allsocal-downv2.vercel.app/api/download?url=${encodeURIComponent(url)}`
+  try {
+    const { q, url, quality } = req.query;
+    const input = q || url;
+
+    if (!input) {
+      return res.status(400).json({
+        success: false,
+        creator: CREATOR,
+        message: "Enter video name or YouTube URL"
+      });
+    }
+
+    if (quality && !normalizeQuality(quality)) {
+      return res.status(400).json({
+        success: false,
+        creator: CREATOR,
+        message: "Invalid quality. Use 144/240/360/480/720/1080"
+      });
+    }
+
+    let videoUrl;
+    let searchMeta = null;
+
+    if (input.includes("youtube.com") || input.includes("youtu.be")) {
+      // Direct URL — skip search
+      videoUrl = input;
+    } else {
+      // Plain query — search first, use top result
+      try {
+        searchMeta = await fastYoutubeSearch(input);
+      } catch {
+        return res.json({
+          success: false,
+          creator: CREATOR,
+          message: "No result found"
+        });
+      }
+      videoUrl = searchMeta.url;
+    }
+
+    let result;
+    try {
+      result = await getVideoResult(videoUrl, quality || null);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        creator: CREATOR,
+        message: "Video not found"
+      });
+    }
+
+    const title = result.title || searchMeta?.title || "video";
+
+    // "redirect" mode: /media/:file 302-redirects to the real link,
+    // so the original source never shows up in the response.
+    const proxy = cacheMedia(
+      req,
+      result.downloadUrl,
+      ".mp4",
+      10 * 60 * 1000,
+      "redirect",
+      title
+    );
+    const thumbnail = cacheMedia(
+      req,
+      result.thumbnail || searchMeta?.thumbnail || null,
+      ".jpg",
+      10 * 60 * 1000,
+      "redirect"
     );
 
-    const mp4_360  = data.videos.find(v => v.quality.includes("360p")  && v.extension === "mp4") || null;
-    const mp4_720  = data.videos.find(v => v.quality.includes("720p")  && v.extension === "mp4") || null;
-    const mp4_1080 = data.videos.find(v => v.quality.includes("1080p") && v.extension === "mp4") || null;
-    const audio    = data.audios.find(a => a.quality.includes("131kb")) || null;
-
-    const fmt = v => v ? { quality: v.quality, type: v.extension, url: v.url } : null;
-
-    res.json({
-      status: true,
+    return res.json({
+      success: true,
       creator: CREATOR,
-      metadata: {
-        title: data.title,
-        thumbnail: data.thumbnail,
-        duration: data.duration
-      },
-      download: {
-        video: {
-          "360p": fmt(mp4_360),
-          "720p": fmt(mp4_720),
-          "1080p": fmt(mp4_1080)
-        },
-        audio: fmt(audio)
+      query: input,
+      result: {
+        title,
+        videoId: searchMeta?.videoId || result.videoId || null,
+        duration: result.duration || searchMeta?.duration || null,
+        quality: result.quality,
+        thumbnail,
+        format: "MP4",
+        url: proxy,
+        mp4: proxy,
+        video: proxy,
+        download: proxy
       }
     });
+
   } catch (err) {
-    res.status(500).json({ status: false, creator: CREATOR, message: "Internal Server Error" });
+    return res.status(404).json({
+      success: false,
+      creator: CREATOR,
+      message: "Video not found"
+    });
   }
 });
 
