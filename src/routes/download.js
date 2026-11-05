@@ -233,11 +233,13 @@ router.get("/api/ytmp4", async (req, res) => {
     let result;
     try {
       result = await getVideoResult(videoUrl, quality || null);
-    } catch {
+    } catch (e) {
+      console.error("[YTMP4] backend failed:", e?.message || e);
       return res.status(404).json({
         success: false,
         creator: CREATOR,
-        message: "Video not found"
+        message: "Video not found",
+        ...(req.query.debug ? { debug: e?.message || String(e) } : {})
       });
     }
 
@@ -280,10 +282,12 @@ router.get("/api/ytmp4", async (req, res) => {
     });
 
   } catch (err) {
+    console.error("[YTMP4] route error:", err?.stack || err);
     return res.status(404).json({
       success: false,
       creator: CREATOR,
-      message: "Video not found"
+      message: "Video not found",
+      ...(req.query.debug ? { debug: err?.message || String(err) } : {})
     });
   }
 });
